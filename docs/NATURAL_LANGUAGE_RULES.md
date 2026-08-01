@@ -6,7 +6,8 @@ Every command is converted into a structured candidate before anything is
 scheduled:
 
 ```text
-intent                  create | update | cancel | snooze | complete | repeat
+intent                  create | reschedule | rename | cancel | snooze |
+                        complete | remind_again | repeat
 task                    required for create
 scheduled_at_utc        nullable
 local_date              nullable
@@ -100,3 +101,41 @@ A recurrence still needs a local time. If it is missing, Atom marks the reminder
 If a command contains conflicting dates, times, or actions, Atom makes no
 mutation and asks the owner to choose one interpretation.
 
+## Deterministic action semantics
+
+The Phase 1 parser runs entirely on-device and never sends command text to an
+AI service. An action is written to Room only when it has no conflicts and no
+required fields are missing.
+
+| Intent | Context required | Room effect |
+| --- | --- | --- |
+| create | no | insert a new reminder |
+| reschedule | yes | update the selected reminder's structured schedule |
+| rename | yes | update its task while preserving its schedule |
+| cancel | yes | retain the record and mark it `Canceled` |
+| snooze | yes | move the selected reminder to the resolved future schedule |
+| complete | yes | retain the record and mark it `Completed` |
+| remind_again | yes | insert another reminder with the same task |
+| repeat | yes | set or clear its recurrence rule |
+
+An omitted date or time is preserved during an explicit edit. A newly created
+reminder still asks once for either missing part. “Remind me again” can reuse
+the selected reminder's date when a replacement time is given; relative forms
+such as “remind me again in 20 minutes” resolve both fields from the device
+clock.
+
+The command parser does not schedule Android alarms itself. It produces the
+validated local and UTC schedule that the alarm layer will consume. That alarm
+layer must cancel an existing alarm before applying a reschedule or snooze.
+
+## Conflict policy
+
+Atom blocks the write and explains the issue when it finds:
+
+- two distinct dates, times, relative schedules, recurrence rules, or actions;
+- a relative schedule combined with an absolute schedule or recurrence;
+- a one-off date combined with recurrence;
+- a 24-hour time, an invalid 12-hour time, or a numeric time without AM/PM;
+- a one-off schedule that is not in the future.
+
+No ambiguous command is silently guessed or rolled forward.

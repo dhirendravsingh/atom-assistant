@@ -1,5 +1,8 @@
 package com.dhiren.atom.ui
 
+import com.dhiren.atom.nlp.AtomCommandParser
+import java.time.ZoneId
+
 enum class AtomScreen {
     Today,
     Capture,
@@ -12,6 +15,8 @@ enum class ReminderState {
     NeedsTime,
     NeedsDate,
     Unscheduled,
+    Completed,
+    Canceled,
 }
 
 enum class ReminderAccent {
@@ -30,33 +35,11 @@ data class ReminderUi(
     val accent: ReminderAccent,
     val recurrence: String? = null,
     val sourceText: String = "",
+    val scheduledAtUtc: String? = null,
+    val localDate: String? = null,
+    val localTime: String? = null,
+    val timezone: String = ZoneId.systemDefault().id,
+    val recurrenceRule: String? = null,
 )
 
-val naturalLanguagePrefixes = listOf(
-    "Atom",
-    "Hey Atom",
-    "Hi Atom",
-    "Hello Atom",
-    "Okay Atom",
-    "Atom, please",
-    "Please remind me",
-    "Can you remind me",
-    "Could you remind me",
-    "Would you remind me",
-    "Remind me",
-    "Remind me again",
-    "I need a reminder",
-    "Set a reminder",
-    "Create a reminder",
-    "Schedule a reminder",
-    "Help me remember",
-    "Don’t let me forget",
-    "Make sure I remember",
-    "Ping me",
-    "Alert me",
-    "Notify me",
-    "Nudge me",
-    "Add this to my reminders",
-    "Keep this on my radar",
-    "Give me a heads-up",
-)
+val naturalLanguagePrefixes = AtomCommandParser.acceptedPrefixes
