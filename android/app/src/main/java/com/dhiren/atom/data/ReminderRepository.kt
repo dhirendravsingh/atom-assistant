@@ -33,8 +33,8 @@ class ReminderRepository(
 
     suspend fun save(reminder: ReminderUi) {
         val existing = reminder.id.takeIf { it != 0L }?.let { reminderDao.getById(it) }
-        val saveZone = existing?.timezone
-            ?.let { runCatching { ZoneId.of(it) }.getOrNull() }
+        val saveZone = runCatching { ZoneId.of(reminder.timezone) }.getOrNull()
+            ?: existing?.timezone?.let { runCatching { ZoneId.of(it) }.getOrNull() }
             ?: zoneProvider()
         reminderDao.upsert(
             reminder.toEntity(
@@ -57,9 +57,13 @@ internal fun ReminderUi.toEntity(
 ): ReminderEntity {
     val now = Instant.now(clock)
     val relativeSchedule = date?.resolveRelative(now, zone)
-    val normalizedDate = relativeSchedule?.toLocalDate() ?: date.toLocalDate(now, zone)
-    val normalizedTime = relativeSchedule?.toLocalTime()?.withSecond(0)?.withNano(0) ?: time.toLocalTime()
-    val recurrenceRule = recurrence.toRecurrenceRule()
+    val normalizedDate = relativeSchedule?.toLocalDate()
+        ?: localDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        ?: date.toLocalDate(now, zone)
+    val normalizedTime = relativeSchedule?.toLocalTime()?.withSecond(0)?.withNano(0)
+        ?: localTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+        ?: time.toLocalTime()
+    val normalizedRecurrenceRule = recurrenceRule ?: recurrence.toRecurrenceRule()
     val scheduledAtUtc = when {
         state != ReminderState.Scheduled -> null
         relativeSchedule != null -> relativeSchedule.toInstant().toString()
@@ -77,7 +81,7 @@ internal fun ReminderUi.toEntity(
         localDate = normalizedDate?.toString(),
         localTime = normalizedTime?.format(DatabaseTimeFormatter),
         timezone = zone.id,
-        recurrenceRule = recurrenceRule,
+        recurrenceRule = normalizedRecurrenceRule,
         source = source,
         state = state.name,
         accent = accent.name,
@@ -104,6 +108,11 @@ internal fun ReminderEntity.toUi(
             ?: ReminderAccent.Mint,
         recurrence = recurrenceRule.toRecurrenceLabel(),
         sourceText = sourceText,
+        scheduledAtUtc = scheduledAtUtc,
+        localDate = localDate,
+        localTime = localTime,
+        timezone = timezone,
+        recurrenceRule = recurrenceRule,
     )
 }
 
@@ -186,7 +195,13 @@ private fun String?.toRecurrenceLabel(): String? = when (this) {
     "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" -> "Every weekday"
     "FREQ=WEEKLY" -> "Every week"
     "FREQ=MONTHLY" -> "Every month"
-    else -> null
+    else -> DayOfWeek.entries.firstNotNullOfOrNull { day ->
+        if (this == "FREQ=WEEKLY;BYDAY=${day.name.take(2)}") {
+            "Every ${day.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() }}"
+        } else {
+            null
+        }
+    }
 }
 
 private fun LocalDate.toDisplayLabel(today: LocalDate): String {

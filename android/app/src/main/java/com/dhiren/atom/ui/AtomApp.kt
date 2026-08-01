@@ -2,6 +2,11 @@ package com.dhiren.atom.ui
 
 import android.app.Activity
 import com.dhiren.atom.AtomApplication
+import com.dhiren.atom.nlp.AtomCommandParser
+import com.dhiren.atom.nlp.CommandIntent
+import com.dhiren.atom.nlp.MissingField
+import com.dhiren.atom.nlp.ParsedCommand
+import com.dhiren.atom.nlp.ReminderContext
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -129,7 +134,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import java.time.LocalDateTime
+import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
@@ -216,12 +224,8 @@ fun AtomApp() {
                                 reminder = editingReminder,
                                 onBack = { currentScreen = AtomScreen.Today },
                                 onSave = { draft ->
-                                    val existing = editingReminder
-                                    val replacement = draft.copy(
-                                        id = existing?.id ?: 0L,
-                                    )
                                     persistenceScope.launch {
-                                        reminderRepository.save(replacement)
+                                        reminderRepository.save(draft)
                                     }
                                     editingReminder = null
                                     currentScreen = AtomScreen.Reminders
@@ -333,7 +337,7 @@ private fun HomeScreen(
                 onAction = onSeeAll,
             )
             Spacer(Modifier.height(12.dp))
-            reminders.firstOrNull()?.let {
+            reminders.firstOrNull { it.state == ReminderState.Scheduled }?.let {
                 NextReminderCard(reminder = it, onEdit = { onEdit(it) })
             }
             Spacer(Modifier.height(18.dp))
@@ -346,7 +350,9 @@ private fun HomeScreen(
                 )
                 StatCard(
                     modifier = Modifier.weight(1f),
-                    value = reminders.count { it.state != ReminderState.Scheduled }.toString().padStart(2, '0'),
+                    value = reminders.count {
+                        it.state in setOf(ReminderState.NeedsDate, ReminderState.NeedsTime, ReminderState.Unscheduled)
+                    }.toString().padStart(2, '0'),
                     label = "Needs a detail",
                     tint = colors.coralPale,
                 )
@@ -744,68 +750,37 @@ private fun androidx.compose.foundation.layout.RowScope.BottomDestination(
     }
 }
 
-private data class CommandDraft(
-    val title: String,
-    val date: String?,
-    val time: String?,
-    val relative: String? = null,
-    val recurrence: String? = null,
-) {
-    val missingDate: Boolean get() = date == null && relative == null
-    val missingTime: Boolean get() = time == null && relative == null
+private val AtomDisplayTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+private val AtomDisplayDateFormatter = DateTimeFormatter.ofPattern("EEE, MMM d", Locale.getDefault())
+
+private fun ReminderUi.toParserContext(): ReminderContext? {
+    if (id == 0L) return null
+    val parsedDate = localDate?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+    val parsedTime = localTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+    val parsedZone = runCatching { ZoneId.of(timezone) }.getOrDefault(ZoneId.systemDefault())
+    return ReminderContext(
+        id = id,
+        title = title,
+        localDate = parsedDate,
+        localTime = parsedTime,
+        timezone = parsedZone,
+        recurrenceRule = recurrenceRule,
+    )
 }
 
-private fun analyzeCommand(input: String): CommandDraft {
-    val normalized = input.trim()
-    val lower = normalized.lowercase(Locale.getDefault())
-    val relativeMatch = Regex("\\bin\\s+(\\d+)\\s+(minute|minutes|hour|hours)\\b", RegexOption.IGNORE_CASE)
-        .find(normalized)
-    val timeMatch = Regex("\\b(?:at\\s+)?(1[0-2]|0?[1-9])(?::([0-5]\\d))?\\s*(am|pm)\\b", RegexOption.IGNORE_CASE)
-        .find(normalized)
+private fun LocalDate.toAtomDateLabel(): String = format(AtomDisplayDateFormatter)
 
-    val date = when {
-        "tomorrow" in lower -> "Tomorrow"
-        "today" in lower -> "Today"
-        Regex("\\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b").containsMatchIn(lower) ->
-            Regex("\\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b").find(lower)?.value?.replaceFirstChar { it.uppercase() }
-        else -> null
-    }
-    val time = timeMatch?.let { match ->
-        val hour = match.groupValues[1].toInt()
-        val minute = match.groupValues[2].ifBlank { "00" }
-        val meridiem = match.groupValues[3].uppercase(Locale.getDefault())
-        "$hour:$minute $meridiem"
-    }
-    val relative = relativeMatch?.value?.replaceFirstChar { it.uppercase() }
-    val recurrence = when {
-        "every weekday" in lower -> "Every weekday"
-        "every day" in lower || "daily" in lower -> "Every day"
-        "every week" in lower || "weekly" in lower -> "Every week"
-        "every month" in lower || "monthly" in lower -> "Every month"
-        else -> null
-    }
+private fun LocalTime.toAtomTimeLabel(): String = format(AtomDisplayTimeFormatter)
 
-    var title = normalized
-    naturalLanguagePrefixes.sortedByDescending { it.length }.forEach { prefix ->
-        title = title.replace(Regex("^${Regex.escape(prefix)}[\\s,:-]*", RegexOption.IGNORE_CASE), "")
-    }
-    title = title
-        .replace(Regex("^(?:remind me(?: again)?(?: to| about)?|to)\\s+", RegexOption.IGNORE_CASE), "")
-        .replace(relativeMatch?.value.orEmpty(), "")
-        .replace(timeMatch?.value.orEmpty(), "")
-        .replace(Regex("\\b(today|tomorrow|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday))\\b", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("\\b(every weekday|every day|daily|every week|weekly|every month|monthly)\\b", RegexOption.IGNORE_CASE), "")
-        .replace(Regex("\\s+"), " ")
-        .trim(' ', ',', '.', '-')
-        .ifBlank { "Untitled reminder" }
-
-    return CommandDraft(
-        title = title.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() },
-        date = if (recurrence != null) recurrence else date,
-        time = time,
-        relative = relative,
-        recurrence = recurrence,
-    )
+private fun CommandIntent.toActionLabel(): String = when (this) {
+    CommandIntent.Create -> "New reminder"
+    CommandIntent.Reschedule -> "Reschedule"
+    CommandIntent.Rename -> "Rename"
+    CommandIntent.Cancel -> "Cancel"
+    CommandIntent.Snooze -> "Snooze"
+    CommandIntent.Complete -> "Complete"
+    CommandIntent.RemindAgain -> "Remind again"
+    CommandIntent.Repeat -> "Recurrence change"
 }
 
 @Composable
@@ -822,27 +797,41 @@ private fun CaptureScreen(
     } ?: ""
     var command by remember(reminder?.id) { mutableStateOf(initialCommand) }
     var listening by remember { mutableStateOf(false) }
-    var draft by remember { mutableStateOf<CommandDraft?>(null) }
+    val parser = remember { AtomCommandParser() }
+    val reminderContext = remember(reminder) { reminder?.toParserContext() }
+    var draft by remember { mutableStateOf<ParsedCommand?>(null) }
     var showFollowUp by remember { mutableStateOf(false) }
 
-    fun saveDraft(value: CommandDraft) {
-        val state = when {
-            value.missingDate && value.missingTime -> ReminderState.Unscheduled
-            value.missingDate -> ReminderState.NeedsDate
-            value.missingTime -> ReminderState.NeedsTime
-            else -> ReminderState.Scheduled
+    fun saveDraft(value: ParsedCommand) {
+        val missingDate = MissingField.Date in value.missingFields
+        val missingTime = MissingField.Time in value.missingFields || MissingField.AmPm in value.missingFields
+        val state = when (value.intent) {
+            CommandIntent.Cancel -> ReminderState.Canceled
+            CommandIntent.Complete -> ReminderState.Completed
+            else -> when {
+                missingDate && missingTime -> ReminderState.Unscheduled
+                missingDate -> ReminderState.NeedsDate
+                missingTime -> ReminderState.NeedsTime
+                else -> ReminderState.Scheduled
+            }
         }
+        val createsAnotherReminder = value.intent == CommandIntent.RemindAgain
         onSave(
             ReminderUi(
-                id = reminder?.id ?: 0L,
-                title = value.title,
-                date = value.date ?: value.relative,
-                time = value.time,
+                id = if (createsAnotherReminder) 0L else reminder?.id ?: 0L,
+                title = value.task ?: reminder?.title ?: "Untitled reminder",
+                date = value.recurrenceLabel ?: value.relativeLabel ?: value.localDate?.toAtomDateLabel(),
+                time = value.localTime?.toAtomTimeLabel(),
                 source = if (listening) "Voice" else "Text",
                 state = state,
                 accent = reminder?.accent ?: ReminderAccent.Mint,
-                recurrence = value.recurrence,
-                sourceText = command,
+                recurrence = value.recurrenceLabel,
+                sourceText = value.sourceText,
+                scheduledAtUtc = value.scheduledAtUtc?.toString(),
+                localDate = value.localDate?.toString(),
+                localTime = value.localTime?.toString(),
+                timezone = value.timezone.id,
+                recurrenceRule = value.recurrenceRule,
             ),
         )
     }
@@ -951,7 +940,7 @@ private fun CaptureScreen(
             Button(
                 onClick = {
                     if (command.isNotBlank()) {
-                        draft = analyzeCommand(command)
+                        draft = parser.parse(command, reminderContext)
                         listening = false
                     }
                 },
@@ -970,7 +959,10 @@ private fun CaptureScreen(
                     draft = understood,
                     isEditing = reminder != null,
                     onContinue = {
-                        if (understood.missingDate || understood.missingTime) showFollowUp = true else saveDraft(understood)
+                        val needsScheduleFollowUp = understood.missingFields.any {
+                            it in setOf(MissingField.Date, MissingField.Time, MissingField.AmPm)
+                        }
+                        if (needsScheduleFollowUp) showFollowUp = true else saveDraft(understood)
                     },
                 )
             }
@@ -981,9 +973,13 @@ private fun CaptureScreen(
         MissingDetailsDialog(
             draft = draft!!,
             onDismiss = { showFollowUp = false },
-            onSave = {
+            onResolve = { details ->
+                parser.parse("${draft!!.sourceText} $details", reminderContext)
+            },
+            onSave = { resolved ->
                 showFollowUp = false
-                saveDraft(it)
+                draft = resolved
+                saveDraft(resolved)
             },
         )
     }
@@ -1046,41 +1042,81 @@ private fun SuggestionChip(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun DraftReviewCard(draft: CommandDraft, isEditing: Boolean, onContinue: () -> Unit) {
+private fun DraftReviewCard(draft: ParsedCommand, isEditing: Boolean, onContinue: () -> Unit) {
     val colors = LocalAtomPalette.current
-    Surface(color = colors.mintPale, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
+    val hasConflicts = draft.conflicts.isNotEmpty()
+    val missingDate = MissingField.Date in draft.missingFields
+    val missingTime = MissingField.Time in draft.missingFields || MissingField.AmPm in draft.missingFields
+    val hasBlockingMissingField = draft.missingFields.any {
+        it !in setOf(MissingField.Date, MissingField.Time, MissingField.AmPm)
+    }
+    Surface(color = if (hasConflicts) colors.coralPale else colors.mintPale, shape = RoundedCornerShape(24.dp), modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Rounded.CheckCircle, null, tint = colors.mintDark, modifier = Modifier.size(20.dp))
+                Icon(
+                    if (hasConflicts) Icons.Rounded.NotificationsNone else Icons.Rounded.CheckCircle,
+                    null,
+                    tint = if (hasConflicts) colors.coral else colors.mintDark,
+                    modifier = Modifier.size(20.dp),
+                )
                 Spacer(Modifier.width(8.dp))
-                Text("I understood", color = colors.mintDark, style = MaterialTheme.typography.labelLarge)
+                Text(
+                    if (hasConflicts) "I need one correction" else "${draft.intent.toActionLabel()} understood",
+                    color = if (hasConflicts) colors.coral else colors.mintDark,
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
             Spacer(Modifier.height(14.dp))
-            Text(draft.title, color = colors.ink, style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailPill(Icons.Rounded.CalendarToday, draft.date ?: draft.relative ?: "Date needed", draft.missingDate)
-                DetailPill(Icons.Rounded.Schedule, draft.time ?: if (draft.relative != null) "Relative" else "Time needed", draft.missingTime)
+            Text(draft.task ?: "Reminder context needed", color = colors.ink, style = MaterialTheme.typography.titleMedium)
+            if (draft.intent !in setOf(CommandIntent.Cancel, CommandIntent.Complete, CommandIntent.Rename)) {
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DetailPill(
+                        Icons.Rounded.CalendarToday,
+                        draft.recurrenceLabel ?: draft.relativeLabel ?: draft.localDate?.toAtomDateLabel() ?: "Date needed",
+                        missingDate,
+                    )
+                    DetailPill(
+                        Icons.Rounded.Schedule,
+                        draft.localTime?.toAtomTimeLabel() ?: "Time needed",
+                        missingTime,
+                    )
+                }
             }
-            if (draft.missingDate || draft.missingTime) {
+            if (hasConflicts) {
+                Spacer(Modifier.height(12.dp))
+                draft.conflicts.forEach { conflict ->
+                    Text("• $conflict", color = colors.coral, style = MaterialTheme.typography.bodyMedium)
+                }
+            } else if (missingDate || missingTime) {
                 Spacer(Modifier.height(12.dp))
                 Text(
-                    "I’ll ask once for ${listOfNotNull(if (draft.missingDate) "a date" else null, if (draft.missingTime) "a time" else null).joinToString(" and ")}.",
+                    "I’ll ask once for ${listOfNotNull(if (missingDate) "a date" else null, if (missingTime) "a 12-hour time" else null).joinToString(" and ")}.",
                     color = colors.muted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            } else if (hasBlockingMissingField) {
+                Spacer(Modifier.height(12.dp))
+                Text("Please mention the reminder or task you want to change.", color = colors.coral, style = MaterialTheme.typography.bodyMedium)
             }
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = onContinue,
+                enabled = !hasConflicts && !hasBlockingMissingField,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(15.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.ink, contentColor = colors.canvas),
             ) {
                 Text(
                     when {
-                        draft.missingDate || draft.missingTime -> "Add missing details"
-                        isEditing -> "Update reminder"
+                        hasConflicts -> "Revise command"
+                        hasBlockingMissingField -> "More information needed"
+                        missingDate || missingTime -> "Add missing details"
+                        draft.intent == CommandIntent.Cancel -> "Cancel reminder"
+                        draft.intent == CommandIntent.Complete -> "Mark complete"
+                        draft.intent == CommandIntent.RemindAgain -> "Create another reminder"
+                        draft.intent == CommandIntent.Snooze -> "Snooze reminder"
+                        isEditing -> "Apply change"
                         else -> "Schedule reminder"
                     },
                 )
@@ -1107,13 +1143,17 @@ private fun DetailPill(icon: androidx.compose.ui.graphics.vector.ImageVector, te
 
 @Composable
 private fun MissingDetailsDialog(
-    draft: CommandDraft,
+    draft: ParsedCommand,
     onDismiss: () -> Unit,
-    onSave: (CommandDraft) -> Unit,
+    onResolve: (String) -> ParsedCommand,
+    onSave: (ParsedCommand) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
-    var date by remember { mutableStateOf(draft.date.orEmpty()) }
-    var time by remember { mutableStateOf(draft.time.orEmpty()) }
+    val missingDate = MissingField.Date in draft.missingFields
+    val missingTime = MissingField.Time in draft.missingFields || MissingField.AmPm in draft.missingFields
+    var date by remember { mutableStateOf("") }
+    var time by remember { mutableStateOf("") }
+    var validationMessage by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.elevated,
@@ -1127,7 +1167,7 @@ private fun MissingDetailsDialog(
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (draft.missingDate) {
+                if (missingDate) {
                     OutlinedTextField(
                         value = date,
                         onValueChange = { date = it },
@@ -1139,7 +1179,7 @@ private fun MissingDetailsDialog(
                         shape = RoundedCornerShape(16.dp),
                     )
                 }
-                if (draft.missingTime) {
+                if (missingTime) {
                     OutlinedTextField(
                         value = time,
                         onValueChange = { time = it },
@@ -1151,6 +1191,9 @@ private fun MissingDetailsDialog(
                         shape = RoundedCornerShape(16.dp),
                     )
                 }
+                validationMessage?.let {
+                    Text(it, color = colors.coral, style = MaterialTheme.typography.bodySmall)
+                }
                 TextButton(onClick = { onSave(draft) }, modifier = Modifier.align(Alignment.Start)) {
                     Text("Save to Unscheduled", color = colors.muted)
                 }
@@ -1159,12 +1202,20 @@ private fun MissingDetailsDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    onSave(
-                        draft.copy(
-                            date = date.ifBlank { draft.date },
-                            time = time.ifBlank { draft.time },
-                        ),
-                    )
+                    val details = listOfNotNull(
+                        date.trim().takeIf { it.isNotBlank() },
+                        time.trim().takeIf { it.isNotBlank() }?.let { "at $it" },
+                    ).joinToString(" ")
+                    val resolved = onResolve(details)
+                    val stillMissingSchedule = resolved.missingFields.any {
+                        it in setOf(MissingField.Date, MissingField.Time, MissingField.AmPm)
+                    }
+                    if (resolved.conflicts.isEmpty() && !stillMissingSchedule) {
+                        onSave(resolved)
+                    } else {
+                        validationMessage = (resolved.conflicts.firstOrNull()
+                            ?: "Please provide the missing date and a time such as 6:30 PM.")
+                    }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = colors.ink, contentColor = colors.canvas),
             ) { Text("Save reminder") }
@@ -1185,8 +1236,9 @@ private fun RemindersScreen(
     val visible = reminders.filter {
         when (filter) {
             "Scheduled" -> it.state == ReminderState.Scheduled
-            "Needs details" -> it.state != ReminderState.Scheduled
+            "Needs details" -> it.state in setOf(ReminderState.NeedsDate, ReminderState.NeedsTime, ReminderState.Unscheduled)
             "Repeats" -> it.recurrence != null
+            "Completed" -> it.state == ReminderState.Completed
             else -> true
         }
     }
@@ -1210,7 +1262,7 @@ private fun RemindersScreen(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf("All", "Scheduled", "Needs details", "Repeats").forEach { option ->
+                    listOf("All", "Scheduled", "Needs details", "Repeats", "Completed").forEach { option ->
                         FilterChip(option, option == filter) { filter = option }
                     }
                 }
