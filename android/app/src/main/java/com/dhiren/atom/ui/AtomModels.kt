@@ -21,7 +21,7 @@ enum class ReminderAccent {
 }
 
 data class ReminderUi(
-    val id: Int,
+    val id: Long,
     val title: String,
     val date: String?,
     val time: String?,
@@ -29,46 +29,7 @@ data class ReminderUi(
     val state: ReminderState,
     val accent: ReminderAccent,
     val recurrence: String? = null,
-)
-
-val sampleReminders = listOf(
-    ReminderUi(
-        id = 1,
-        title = "Send product brief to Aisha",
-        date = "Today · Jul 31",
-        time = "6:30 PM",
-        source = "Voice",
-        state = ReminderState.Scheduled,
-        accent = ReminderAccent.Mint,
-    ),
-    ReminderUi(
-        id = 2,
-        title = "Renew car insurance",
-        date = "Tomorrow · Aug 1",
-        time = "10:00 AM",
-        source = "Text",
-        state = ReminderState.Scheduled,
-        accent = ReminderAccent.Coral,
-    ),
-    ReminderUi(
-        id = 3,
-        title = "Call Rhea about the launch",
-        date = "Friday · Aug 7",
-        time = null,
-        source = "Voice",
-        state = ReminderState.NeedsTime,
-        accent = ReminderAccent.Lime,
-    ),
-    ReminderUi(
-        id = 4,
-        title = "Review today’s priorities",
-        date = "Every weekday",
-        time = "9:00 AM",
-        source = "Voice",
-        state = ReminderState.Scheduled,
-        accent = ReminderAccent.Mint,
-        recurrence = "Every weekday",
-    ),
+    val sourceText: String = "",
 )
 
 val naturalLanguagePrefixes = listOf(
