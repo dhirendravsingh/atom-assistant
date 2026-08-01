@@ -1,6 +1,6 @@
 # Atom
 
-Atom is a personal, Android-first reminder assistant for Dhiren Sir. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
+Atom is a personal, Android-first reminder assistant for Dhiren. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
 
 This repository currently contains two complementary surfaces:
 
