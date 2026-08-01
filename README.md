@@ -11,7 +11,7 @@ This repository currently contains two complementary surfaces:
 
 The Android Phase 1 UI is implemented: light/dark themes, time-aware greeting, animated quick capture, 14 Atom marks, capture/review/follow-up flows, reminder editing, recurring reminder presentation, settings, and a full-screen Alarm Mode preview.
 
-The current Android code is deliberately a UI milestone. Durable Room storage, Android alarm scheduling, on-device speech recognition, notification channels, reboot recovery, Railway sync, and the optional OpenAI fallback are not connected yet. The UI labels these boundaries instead of pretending they are live.
+Durable offline Room storage is connected: reminders now survive application restarts and the single owner profile is initialized automatically on first use. Android alarm scheduling, on-device speech recognition, notification channels, reboot recovery, Railway sync, and the optional OpenAI fallback are not connected yet. The UI labels these boundaries instead of pretending they are live.
 
 ## Run the Android app
 
@@ -50,6 +50,7 @@ Then open `http://localhost:3000`.
 - `docs/NOTIFICATION_POLICY.md`
 - `docs/PRIVACY.md`
 - `docs/FAILURE_SCENARIOS.md`
+- `docs/LOCAL_DATABASE.md`
 - `docs/changelog/` — one changelog fragment per pull request
 
 ## Repository safety

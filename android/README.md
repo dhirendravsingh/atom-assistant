@@ -29,10 +29,16 @@ The first build downloads Gradle and Android dependencies. The checked-in Gradle
 - text and microphone-shaped capture interactions
 - deterministic preview for 12-hour time, relative time, dates, and recurrence phrases
 - one-time missing-date/time follow-up dialog
-- editable sample reminders and filters
+- Room-backed editable reminders and filters
 - 14 selectable Atom logo directions
 - full-screen Alarm Mode preview
 
+## Local persistence
+
+Room creates the private `atom.db` database automatically on first use. The
+database contains the single owner profile and normalized reminder records.
+No external database initialization or credentials are required.
+
 ## Not connected yet
 
-The next implementation milestones will add Room persistence, Android exact alarms and notifications, speech recognition, reboot recovery, Railway/PostgreSQL sync, and an opt-in OpenAI parser fallback. No API key belongs in the Android package.
+The next implementation milestones will add Android exact alarms and notifications, speech recognition, reboot recovery, Railway/PostgreSQL sync, and an opt-in OpenAI parser fallback. No API key belongs in the Android package.

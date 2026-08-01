@@ -1,6 +1,7 @@
 package com.dhiren.atom.ui
 
 import android.app.Activity
+import com.dhiren.atom.AtomApplication
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -94,10 +95,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -113,6 +115,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -130,12 +133,19 @@ import java.time.ZoneId
 import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlinx.coroutines.launch
 
 private const val OwnerName = "Dhiren Sir"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AtomApp() {
+    val context = LocalContext.current
+    val reminderRepository = remember(context) {
+        (context.applicationContext as AtomApplication).reminderRepository
+    }
+    val reminders by reminderRepository.reminders.collectAsState(initial = emptyList())
+    val persistenceScope = rememberCoroutineScope()
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     var darkTheme by rememberSaveable { mutableStateOf(systemDark) }
     var currentScreen by rememberSaveable { mutableStateOf(AtomScreen.Today) }
@@ -143,7 +153,6 @@ fun AtomApp() {
     var showLogoGallery by rememberSaveable { mutableStateOf(false) }
     var showAlarmPreview by rememberSaveable { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderUi?>(null) }
-    val reminders = remember { mutableStateListOf<ReminderUi>().apply { addAll(sampleReminders) } }
 
     AtomTheme(darkTheme = darkTheme) {
         val colors = LocalAtomPalette.current
@@ -209,13 +218,10 @@ fun AtomApp() {
                                 onSave = { draft ->
                                     val existing = editingReminder
                                     val replacement = draft.copy(
-                                        id = existing?.id ?: ((reminders.maxOfOrNull { it.id } ?: 0) + 1),
+                                        id = existing?.id ?: 0L,
                                     )
-                                    if (existing != null) {
-                                        val index = reminders.indexOfFirst { it.id == existing.id }
-                                        if (index >= 0) reminders[index] = replacement
-                                    } else {
-                                        reminders.add(0, replacement)
+                                    persistenceScope.launch {
+                                        reminderRepository.save(replacement)
                                     }
                                     editingReminder = null
                                     currentScreen = AtomScreen.Reminders
@@ -228,7 +234,11 @@ fun AtomApp() {
                                     editingReminder = it
                                     currentScreen = AtomScreen.Capture
                                 },
-                                onDelete = { reminders.remove(it) },
+                                onDelete = {
+                                    persistenceScope.launch {
+                                        reminderRepository.delete(it.id)
+                                    }
+                                },
                                 onAdd = {
                                     editingReminder = null
                                     currentScreen = AtomScreen.Capture
@@ -806,7 +816,9 @@ private fun CaptureScreen(
 ) {
     val colors = LocalAtomPalette.current
     val initialCommand = reminder?.let {
-        "Remind me to ${it.title}${it.date?.let { date -> " $date" }.orEmpty()}${it.time?.let { time -> " at $time" }.orEmpty()}"
+        it.sourceText.ifBlank {
+            "Remind me to ${it.title}${it.date?.let { date -> " $date" }.orEmpty()}${it.time?.let { time -> " at $time" }.orEmpty()}"
+        }
     } ?: ""
     var command by remember(reminder?.id) { mutableStateOf(initialCommand) }
     var listening by remember { mutableStateOf(false) }
@@ -822,7 +834,7 @@ private fun CaptureScreen(
         }
         onSave(
             ReminderUi(
-                id = reminder?.id ?: 0,
+                id = reminder?.id ?: 0L,
                 title = value.title,
                 date = value.date ?: value.relative,
                 time = value.time,
@@ -830,6 +842,7 @@ private fun CaptureScreen(
                 state = state,
                 accent = reminder?.accent ?: ReminderAccent.Mint,
                 recurrence = value.recurrence,
+                sourceText = command,
             ),
         )
     }
@@ -1439,7 +1452,7 @@ private fun SettingsScreen(
                 Icon(Icons.Rounded.CloudOff, null, tint = colors.muted, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "The UI is offline-first. Device storage, alarms, speech recognition, and optional cloud sync are wired in the implementation phases that follow.",
+                    "Offline device storage is active. Alarms, speech recognition, and optional cloud sync are wired in the implementation phases that follow.",
                     color = colors.muted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
