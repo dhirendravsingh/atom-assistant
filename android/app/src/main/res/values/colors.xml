@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="atom_canvas">#EDF0EB</color>
+    <color name="atom_ink">#101311</color>
+    <color name="ic_launcher_background">#101311</color>
+</resources>
