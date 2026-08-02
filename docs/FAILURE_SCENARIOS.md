@@ -2,8 +2,9 @@
 
 | Scenario | Required behavior |
 | --- | --- |
-| Microphone permission denied | Keep text entry fully usable and show a direct permission repair action |
-| Speech unavailable offline | Explain that voice is unavailable; preserve any typed text; never upload unless fallback is enabled |
+| Microphone permission denied | Keep text entry fully usable and show a button that opens Atom's Android app settings |
+| Speech unavailable offline | Explain that the recognizer or language pack is unavailable; preserve typed text and keep all text fields usable |
+| Speech recognition fails after a partial result | Restore the field's value from before listening so partial output never overwrites typed text |
 | Empty or low-confidence transcript | Keep the editable transcript and ask the owner to retry or type |
 | Date or time missing | Ask once with mic and text; allow Save to Unscheduled |
 | AM/PM missing | Mark time incomplete and require AM or PM |
@@ -27,4 +28,3 @@
 No failure may discard a captured task silently. Atom must always leave the
 owner with either a confirmed schedule, an Unscheduled reminder, or an explicit
 unchanged state.
-

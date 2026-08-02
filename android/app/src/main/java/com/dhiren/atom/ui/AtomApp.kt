@@ -1,12 +1,23 @@
 package com.dhiren.atom.ui
 
+import android.Manifest
 import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.Settings
 import com.dhiren.atom.AtomApplication
 import com.dhiren.atom.nlp.AtomCommandParser
 import com.dhiren.atom.nlp.CommandIntent
 import com.dhiren.atom.nlp.MissingField
 import com.dhiren.atom.nlp.ParsedCommand
 import com.dhiren.atom.nlp.ReminderContext
+import com.dhiren.atom.speech.AtomSpeechRecognizer
+import com.dhiren.atom.speech.SpeechCaptureState
+import com.dhiren.atom.speech.SpeechInputTarget
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -99,6 +110,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,6 +133,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -133,6 +146,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.LocalTime
@@ -434,6 +448,7 @@ private fun HeaderIcon(
 @Composable
 private fun GreetingCard(scheduledCount: Int) {
     val colors = LocalAtomPalette.current
+    val locale = LocalConfiguration.current.locales[0]
     val now = remember { LocalDateTime.now() }
     Surface(
         color = colors.paper,
@@ -448,7 +463,7 @@ private fun GreetingCard(scheduledCount: Int) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    friendlyDate(now.toLocalDate()).uppercase(Locale.getDefault()),
+                    friendlyDate(now.toLocalDate()).uppercase(locale),
                     color = colors.muted,
                     style = MaterialTheme.typography.labelMedium,
                     letterSpacing = 1.1.sp,
@@ -783,6 +798,15 @@ private fun CommandIntent.toActionLabel(): String = when (this) {
     CommandIntent.Repeat -> "Recurrence change"
 }
 
+private fun Context.openAtomAppSettings() {
+    startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+}
+
 @Composable
 private fun CaptureScreen(
     reminder: ReminderUi?,
@@ -790,17 +814,72 @@ private fun CaptureScreen(
     onSave: (ReminderUi) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
+    val context = LocalContext.current
     val initialCommand = reminder?.let {
         it.sourceText.ifBlank {
             "Remind me to ${it.title}${it.date?.let { date -> " $date" }.orEmpty()}${it.time?.let { time -> " at $time" }.orEmpty()}"
         }
     } ?: ""
     var command by remember(reminder?.id) { mutableStateOf(initialCommand) }
-    var listening by remember { mutableStateOf(false) }
     val parser = remember { AtomCommandParser() }
     val reminderContext = remember(reminder) { reminder?.toParserContext() }
     var draft by remember { mutableStateOf<ParsedCommand?>(null) }
     var showFollowUp by remember { mutableStateOf(false) }
+    var speechState by remember { mutableStateOf<SpeechCaptureState>(SpeechCaptureState.Idle) }
+    var permissionDenied by remember { mutableStateOf(false) }
+    var voiceSessionOriginal by remember { mutableStateOf(initialCommand) }
+    var voiceFinalized by remember { mutableStateOf(false) }
+    var lastInputWasVoice by remember { mutableStateOf(false) }
+    val speechRecognizer = remember(context, reminder?.id) {
+        AtomSpeechRecognizer(
+            context = context,
+            onPartialResult = { target, transcript ->
+                if (target == SpeechInputTarget.Command) {
+                    command = transcript
+                    draft = null
+                }
+            },
+            onFinalResult = { target, transcript ->
+                if (target == SpeechInputTarget.Command) {
+                    voiceFinalized = true
+                    lastInputWasVoice = true
+                    command = transcript
+                    draft = null
+                }
+            },
+            onStateChanged = { state ->
+                speechState = state
+                if (state is SpeechCaptureState.Error && !voiceFinalized) {
+                    command = voiceSessionOriginal
+                }
+            },
+        )
+    }
+    DisposableEffect(speechRecognizer) {
+        onDispose { speechRecognizer.destroy() }
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionDenied = !granted
+        if (granted) speechRecognizer.start(SpeechInputTarget.Command)
+    }
+    val speechActive = speechState is SpeechCaptureState.Listening || speechState is SpeechCaptureState.Processing
+
+    fun beginCommandSpeech() {
+        voiceSessionOriginal = command
+        voiceFinalized = false
+        permissionDenied = false
+        when {
+            !speechRecognizer.capability.available -> {
+                speechState = SpeechCaptureState.Unavailable(speechRecognizer.capability.description)
+            }
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> {
+                speechRecognizer.start(SpeechInputTarget.Command)
+            }
+            else -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     fun saveDraft(value: ParsedCommand) {
         val missingDate = MissingField.Date in value.missingFields
@@ -822,7 +901,7 @@ private fun CaptureScreen(
                 title = value.task ?: reminder?.title ?: "Untitled reminder",
                 date = value.recurrenceLabel ?: value.relativeLabel ?: value.localDate?.toAtomDateLabel(),
                 time = value.localTime?.toAtomTimeLabel(),
-                source = if (listening) "Voice" else "Text",
+                source = if (lastInputWasVoice) "Voice" else "Text",
                 state = state,
                 accent = reminder?.accent ?: ReminderAccent.Mint,
                 recurrence = value.recurrenceLabel,
@@ -861,7 +940,12 @@ private fun CaptureScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 if (command.isNotBlank()) {
-                    IconButton(onClick = { command = ""; draft = null }) {
+                    IconButton(onClick = {
+                        speechRecognizer.cancel()
+                        command = ""
+                        draft = null
+                        lastInputWasVoice = false
+                    }) {
                         Icon(Icons.Rounded.Close, "Clear", tint = colors.muted)
                     }
                 }
@@ -880,14 +964,38 @@ private fun CaptureScreen(
             )
             Spacer(Modifier.height(26.dp))
             VoiceOrb(
-                listening = listening,
+                listening = speechActive,
                 onClick = {
-                    listening = !listening
-                    if (command.isBlank()) {
-                        command = "Hey Atom, remind me to send the product brief tomorrow at 6:30 PM"
-                    }
+                    if (speechActive) speechRecognizer.stop() else beginCommandSpeech()
                 },
             )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                when (val state = speechState) {
+                    is SpeechCaptureState.Listening -> "Listening on your device…"
+                    is SpeechCaptureState.Processing -> "Finishing transcription…"
+                    is SpeechCaptureState.Error -> state.message
+                    is SpeechCaptureState.Unavailable -> state.message
+                    SpeechCaptureState.Idle -> speechRecognizer.capability.description
+                },
+                color = when (speechState) {
+                    is SpeechCaptureState.Error,
+                    is SpeechCaptureState.Unavailable,
+                    -> colors.coral
+                    else -> colors.muted
+                },
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (permissionDenied) {
+                TextButton(
+                    onClick = { context.openAtomAppSettings() },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text("Allow microphone in Settings", color = colors.coral)
+                }
+            }
             Spacer(Modifier.height(24.dp))
             Surface(
                 color = colors.surface,
@@ -900,12 +1008,16 @@ private fun CaptureScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("YOUR WORDS", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.1.sp)
                         Spacer(Modifier.weight(1f))
-                        Text(if (listening) "Listening…" else "Editable", color = if (listening) colors.coral else colors.mintDark, style = MaterialTheme.typography.labelMedium)
+                        Text(if (speechActive) "Listening…" else "Editable", color = if (speechActive) colors.coral else colors.mintDark, style = MaterialTheme.typography.labelMedium)
                     }
                     Spacer(Modifier.height(12.dp))
                     BasicTextField(
                         value = command,
-                        onValueChange = { command = it; draft = null },
+                        onValueChange = {
+                            command = it
+                            draft = null
+                            lastInputWasVoice = false
+                        },
                         minLines = 3,
                         maxLines = 6,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.ink),
@@ -933,6 +1045,7 @@ private fun CaptureScreen(
                             else -> "Hey Atom, remind me to submit the report tomorrow at 12:00 AM"
                         }
                         draft = null
+                        lastInputWasVoice = false
                     }
                 }
             }
@@ -941,10 +1054,10 @@ private fun CaptureScreen(
                 onClick = {
                     if (command.isNotBlank()) {
                         draft = parser.parse(command, reminderContext)
-                        listening = false
+                        if (speechActive) speechRecognizer.stop()
                     }
                 },
-                enabled = command.isNotBlank(),
+                enabled = command.isNotBlank() && !speechActive,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.ink, contentColor = colors.canvas),
@@ -976,6 +1089,7 @@ private fun CaptureScreen(
             onResolve = { details ->
                 parser.parse("${draft!!.sourceText} $details", reminderContext)
             },
+            onVoiceInput = { lastInputWasVoice = true },
             onSave = { resolved ->
                 showFollowUp = false
                 draft = resolved
@@ -1146,14 +1260,86 @@ private fun MissingDetailsDialog(
     draft: ParsedCommand,
     onDismiss: () -> Unit,
     onResolve: (String) -> ParsedCommand,
+    onVoiceInput: () -> Unit,
     onSave: (ParsedCommand) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
+    val context = LocalContext.current
     val missingDate = MissingField.Date in draft.missingFields
     val missingTime = MissingField.Time in draft.missingFields || MissingField.AmPm in draft.missingFields
     var date by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("") }
     var validationMessage by remember { mutableStateOf<String?>(null) }
+    var speechState by remember { mutableStateOf<SpeechCaptureState>(SpeechCaptureState.Idle) }
+    var activeSpeechTarget by remember { mutableStateOf<SpeechInputTarget?>(null) }
+    var previousSpokenFieldValue by remember { mutableStateOf("") }
+    var followUpFinalized by remember { mutableStateOf(false) }
+    var permissionDenied by remember { mutableStateOf(false) }
+    val speechRecognizer = remember(context) {
+        AtomSpeechRecognizer(
+            context = context,
+            onPartialResult = { target, transcript ->
+                when (target) {
+                    SpeechInputTarget.MissingDate -> date = transcript
+                    SpeechInputTarget.MissingTime -> time = transcript
+                    SpeechInputTarget.Command -> Unit
+                }
+                validationMessage = null
+            },
+            onFinalResult = { target, transcript ->
+                followUpFinalized = true
+                onVoiceInput()
+                when (target) {
+                    SpeechInputTarget.MissingDate -> date = transcript
+                    SpeechInputTarget.MissingTime -> time = transcript
+                    SpeechInputTarget.Command -> Unit
+                }
+                activeSpeechTarget = null
+                validationMessage = null
+            },
+            onStateChanged = { state ->
+                speechState = state
+                if (state is SpeechCaptureState.Error && !followUpFinalized) {
+                    when (activeSpeechTarget) {
+                        SpeechInputTarget.MissingDate -> date = previousSpokenFieldValue
+                        SpeechInputTarget.MissingTime -> time = previousSpokenFieldValue
+                        else -> Unit
+                    }
+                }
+            },
+        )
+    }
+    DisposableEffect(speechRecognizer) {
+        onDispose { speechRecognizer.destroy() }
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionDenied = !granted
+        if (granted) activeSpeechTarget?.let { speechRecognizer.start(it) }
+    }
+    val speechActive = speechState is SpeechCaptureState.Listening || speechState is SpeechCaptureState.Processing
+
+    fun beginFollowUpSpeech(target: SpeechInputTarget) {
+        activeSpeechTarget = target
+        previousSpokenFieldValue = when (target) {
+            SpeechInputTarget.MissingDate -> date
+            SpeechInputTarget.MissingTime -> time
+            SpeechInputTarget.Command -> ""
+        }
+        followUpFinalized = false
+        permissionDenied = false
+        when {
+            !speechRecognizer.capability.available -> {
+                speechState = SpeechCaptureState.Unavailable(speechRecognizer.capability.description)
+            }
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> {
+                speechRecognizer.start(target)
+            }
+            else -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.elevated,
@@ -1170,11 +1356,27 @@ private fun MissingDetailsDialog(
                 if (missingDate) {
                     OutlinedTextField(
                         value = date,
-                        onValueChange = { date = it },
+                        onValueChange = { date = it; validationMessage = null },
                         label = { Text("Date") },
                         placeholder = { Text("Today, tomorrow, or a date") },
                         leadingIcon = { Icon(Icons.Rounded.CalendarToday, null) },
-                        trailingIcon = { Icon(Icons.Rounded.Mic, "Speak the date") },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) {
+                                        speechRecognizer.stop()
+                                    } else {
+                                        beginFollowUpSpeech(SpeechInputTarget.MissingDate)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) Icons.Rounded.Check else Icons.Rounded.Mic,
+                                    "Speak the date",
+                                    tint = if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) colors.coral else colors.muted,
+                                )
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                     )
@@ -1182,14 +1384,42 @@ private fun MissingDetailsDialog(
                 if (missingTime) {
                     OutlinedTextField(
                         value = time,
-                        onValueChange = { time = it },
+                        onValueChange = { time = it; validationMessage = null },
                         label = { Text("Time · 12-hour format") },
                         placeholder = { Text("6:30 PM") },
                         leadingIcon = { Icon(Icons.Rounded.Schedule, null) },
-                        trailingIcon = { Icon(Icons.Rounded.Mic, "Speak the time") },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) {
+                                        speechRecognizer.stop()
+                                    } else {
+                                        beginFollowUpSpeech(SpeechInputTarget.MissingTime)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) Icons.Rounded.Check else Icons.Rounded.Mic,
+                                    "Speak the time",
+                                    tint = if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) colors.coral else colors.muted,
+                                )
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                     )
+                }
+                when (val state = speechState) {
+                    is SpeechCaptureState.Listening -> Text("Listening…", color = colors.mintDark, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Processing -> Text("Finishing transcription…", color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Error -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Unavailable -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
+                    SpeechCaptureState.Idle -> Unit
+                }
+                if (permissionDenied) {
+                    TextButton(onClick = { context.openAtomAppSettings() }) {
+                        Text("Allow microphone in Settings", color = colors.coral)
+                    }
                 }
                 validationMessage?.let {
                     Text(it, color = colors.coral, style = MaterialTheme.typography.bodySmall)

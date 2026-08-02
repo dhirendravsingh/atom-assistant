@@ -12,9 +12,17 @@ The Android Room database is the primary store. The app remains functional
 without Railway. If sync is enabled, Railway PostgreSQL receives the minimum
 structured reminder data required for backup and cross-install recovery.
 
-Voice is transcribed through Android's on-device speech capability whenever the
-device supports it. Raw audio is temporary and is deleted immediately after a
-successful or abandoned transcription. Atom does not build a voiceprint.
+Voice is transcribed through Android's speech-recognition service. On Android
+12 and newer, Atom only enables voice when Android reports that the dedicated
+on-device recognizer is available. On older supported Android versions, Atom
+requests offline-preferred recognition; whether that stays fully offline
+depends on the speech service installed by the phone manufacturer. The UI
+identifies which mode is active.
+
+Atom never stores raw microphone audio and does not build a voiceprint. It keeps
+only the editable transcript after recognition. If the offline recognizer or
+language pack is unavailable, typed entry remains available and no OpenAI
+fallback is enabled automatically.
 
 ## Optional OpenAI fallback
 
@@ -37,4 +45,3 @@ result and confirms it before any reminder mutation.
 - Support delete reminder, delete cloud backup, and reset all Atom data.
 - Keep operational logs short-lived and document the retention period before
   production launch.
-
