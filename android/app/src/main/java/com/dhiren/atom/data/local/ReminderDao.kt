@@ -22,7 +22,10 @@ interface ReminderDao {
     suspend fun getById(id: Long): ReminderEntity?
 
     @Upsert
-    suspend fun upsert(reminder: ReminderEntity)
+    suspend fun upsert(reminder: ReminderEntity): Long
+
+    @Query("SELECT * FROM reminders WHERE state = 'Scheduled'")
+    suspend fun getScheduled(): List<ReminderEntity>
 
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun deleteById(id: Long)

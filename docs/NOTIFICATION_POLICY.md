@@ -11,6 +11,8 @@ For each complete schedule Atom creates a local Android alarm:
 
 - Use `AlarmManager.setExactAndAllowWhileIdle` when exact-alarm permission is
   available.
+- Fall back to `setAndAllowWhileIdle` and show notification health as needing
+  repair when exact-alarm access is unavailable.
 - Use a unique stable alarm identifier derived from the reminder occurrence.
 - Show a notification channel with sound, vibration, and lock-screen visibility.
 - Alarm Mode may launch a full-screen ringing screen until dismissed or snoozed.
@@ -21,8 +23,11 @@ For each complete schedule Atom creates a local Android alarm:
 - Unscheduled, `needs_date`, and `needs_time` reminders never create alarms.
 - Editing cancels the previous alarm before scheduling the replacement.
 - Cancelling removes the alarm and any pending backup push.
-- Snoozing creates a new one-off occurrence linked to the original reminder.
-- “Remind me again” creates a new requested occurrence after the current alarm.
+- Snoozing moves the current occurrence ten minutes into the future while
+  preserving its recurrence rule.
+- One-tap “Remind me again” creates a separate one-off occurrence one hour in
+  the future. Natural-language remind-again commands can still choose another
+  date or time.
 - For recurrence, schedule only the nearest future occurrence; after it fires,
   calculate and register the next one from the RRULE.
 - Dedupe by occurrence ID so a local alarm and backup push cannot notify twice.
@@ -39,12 +44,13 @@ battery optimization risk, and the time of the last successful reconciliation.
 
 ## Delivery actions
 
-Every scheduled notification offers Done and Snooze. Alarm Mode additionally
-offers Remind me again. Actions must write their state locally before attempting
-network sync.
+Every scheduled notification and the real full-screen Alarm Mode offer Done,
+Snooze 10 minutes, and Remind in 1 hour. One-off reminders become completed
+when Done is selected. For recurring reminders, delivery has already advanced
+the stored next occurrence, so Done dismisses only the ringing occurrence.
+Actions write their state locally before any future network sync.
 
 Android cannot guarantee a ring after the owner force-stops the app, revokes
 permission, powers off the device, or applies aggressive vendor battery
 restrictions. Atom must surface these conditions honestly and provide a repair
 action instead of claiming everything is healthy.
-

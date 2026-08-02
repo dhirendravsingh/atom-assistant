@@ -1,11 +1,14 @@
 package com.dhiren.atom.ui
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import com.dhiren.atom.AtomApplication
 import com.dhiren.atom.nlp.AtomCommandParser
@@ -16,6 +19,7 @@ import com.dhiren.atom.nlp.ReminderContext
 import com.dhiren.atom.speech.AtomSpeechRecognizer
 import com.dhiren.atom.speech.SpeechCaptureState
 import com.dhiren.atom.speech.SpeechInputTarget
+import com.dhiren.atom.notifications.AlarmPreferences
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -82,12 +86,10 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -100,7 +102,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -175,6 +176,22 @@ fun AtomApp() {
     var showLogoGallery by rememberSaveable { mutableStateOf(false) }
     var showAlarmPreview by rememberSaveable { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderUi?>(null) }
+    var pendingNotificationSave by remember { mutableStateOf<ReminderUi?>(null) }
+
+    fun persistReminder(reminder: ReminderUi) {
+        persistenceScope.launch {
+            reminderRepository.save(reminder)
+        }
+        editingReminder = null
+        currentScreen = AtomScreen.Reminders
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        pendingNotificationSave?.let(::persistReminder)
+        pendingNotificationSave = null
+    }
 
     AtomTheme(darkTheme = darkTheme) {
         val colors = LocalAtomPalette.current
@@ -238,11 +255,15 @@ fun AtomApp() {
                                 reminder = editingReminder,
                                 onBack = { currentScreen = AtomScreen.Today },
                                 onSave = { draft ->
-                                    persistenceScope.launch {
-                                        reminderRepository.save(draft)
+                                    if (
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        pendingNotificationSave = draft
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        persistReminder(draft)
                                     }
-                                    editingReminder = null
-                                    currentScreen = AtomScreen.Reminders
                                 },
                             )
 
@@ -805,6 +826,22 @@ private fun Context.openAtomAppSettings() {
             Uri.fromParts("package", packageName, null),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
+}
+
+private fun Context.openNotificationRepairSettings() {
+    val alarmManager = getSystemService(AlarmManager::class.java)
+    val notificationManager = getSystemService(NotificationManager::class.java)
+    val intent = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms() ->
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.fromParts("package", packageName, null))
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !notificationManager.canUseFullScreenIntent() ->
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", packageName, null))
+        else -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    }
+    startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
 @Composable
@@ -1610,11 +1647,27 @@ private fun SettingsScreen(
     onAlarmPreview: () -> Unit,
 ) {
     val colors = LocalAtomPalette.current
-    var alarmMode by rememberSaveable { mutableStateOf(true) }
+    val context = LocalContext.current
+    val alarmPreferences = remember(context) { AlarmPreferences(context) }
+    var alarmMode by rememberSaveable { mutableStateOf(alarmPreferences.alarmModeEnabled) }
     var aiFallback by rememberSaveable { mutableStateOf(false) }
     var showPrefixes by rememberSaveable { mutableStateOf(false) }
     val locale = remember { Locale.getDefault().displayName }
     val timezone = remember { ZoneId.systemDefault().id }
+    val notificationPermissionReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    val exactAlarmReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    val fullScreenReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+        context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+    val notificationHealthy = notificationPermissionReady && exactAlarmReady && (!alarmMode || fullScreenReady)
+    val notificationHealthText = listOfNotNull(
+        if (!notificationPermissionReady) "notification permission" else null,
+        if (!exactAlarmReady) "exact alarm access" else null,
+        if (alarmMode && !fullScreenReady) "full-screen access" else null,
+    ).let { missing ->
+        if (missing.isEmpty()) "Sound, vibration, and alarm access ready" else "Needs ${missing.joinToString()}"
+    }
 
     ScreenFrame {
         Column(
@@ -1685,7 +1738,10 @@ private fun SettingsScreen(
                     trailing = {
                         Switch(
                             checked = alarmMode,
-                            onCheckedChange = { alarmMode = it },
+                            onCheckedChange = {
+                                alarmMode = it
+                                alarmPreferences.alarmModeEnabled = it
+                            },
                             colors = atomSwitchColors(),
                         )
                     },
@@ -1701,8 +1757,9 @@ private fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "Notification health",
-                    subtitle = "Permissions checked on this device",
-                    badge = "Ready",
+                    subtitle = notificationHealthText,
+                    badge = if (notificationHealthy) "Ready" else "Repair",
+                    onClick = { if (!notificationHealthy) context.openNotificationRepairSettings() },
                 )
             }
             Spacer(Modifier.height(22.dp))
@@ -1734,7 +1791,7 @@ private fun SettingsScreen(
                 Icon(Icons.Rounded.CloudOff, null, tint = colors.muted, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Offline device storage is active. Alarms, speech recognition, and optional cloud sync are wired in the implementation phases that follow.",
+                    "Offline storage, speech recognition, and local alarm delivery stay on this device. Railway sync remains optional.",
                     color = colors.muted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -1922,7 +1979,7 @@ private fun AtomWordmark(variant: LogoVariant, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
+internal fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
     val colors = LocalAtomPalette.current
     val darkBack = variant !in listOf(LogoVariant.Pulse, LogoVariant.Halo, LogoVariant.Mono, LogoVariant.Arc)
     val shape = when (variant) {
@@ -2049,69 +2106,17 @@ private fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
 
 @Composable
 private fun AlarmPreview(onDismiss: () -> Unit) {
-    val colors = LocalAtomPalette.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = colors.quickCard) {
-            Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(14.dp)) {
-                    Icon(Icons.Rounded.Close, "Close preview", tint = colors.quickCardText.copy(alpha = .7f))
-                }
-                Column(
-                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 30.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    AtomGlyph(LogoVariant.Original, Modifier.size(56.dp))
-                    Spacer(Modifier.height(30.dp))
-                    Text("12:00", color = colors.quickCardText, fontSize = 68.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-3).sp)
-                    Text("PM · REMINDER", color = colors.mint, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.5.sp)
-                    Spacer(Modifier.height(25.dp))
-                    Text(
-                        "Send product brief to Aisha",
-                        color = colors.quickCardText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Atom is ringing until you choose.", color = colors.quickCardText.copy(alpha = .55f), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(42.dp))
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth().height(58.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.mint, contentColor = Color(0xFF082017)),
-                    ) {
-                        Icon(Icons.Rounded.Check, null)
-                        Spacer(Modifier.width(9.dp))
-                        Text("Done")
-                    }
-                    Spacer(Modifier.height(11.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(54.dp),
-                            shape = RoundedCornerShape(17.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.quickCardText),
-                        ) {
-                            Icon(Icons.Rounded.Snooze, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("Snooze")
-                        }
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(54.dp),
-                            shape = RoundedCornerShape(17.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.quickCardText),
-                        ) {
-                            Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("Remind again")
-                        }
-                    }
-                }
-            }
-        }
+        AtomAlarmScreen(
+            title = "Send product brief to Aisha",
+            busy = false,
+            onDone = onDismiss,
+            onSnooze = onDismiss,
+            onRemindAgain = onDismiss,
+            onClose = onDismiss,
+        )
     }
 }
