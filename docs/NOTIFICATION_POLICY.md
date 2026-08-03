@@ -39,8 +39,20 @@ and locale change. On these events it reloads future reminders from Room and
 reconciles Android alarms. Recurrences are recalculated in their stored IANA
 timezone.
 
+If a stored occurrence became due while the device was powered off or Atom was
+otherwise unavailable, reconciliation classifies it as missed. Occurrences up
+to 24 hours old receive one deduplicated “Missed reminder” notification with
+Done, Snooze, and Remind Again actions. Older one-off reminders move to the
+Missed list without creating a noisy late alert. Missed recurring reminders
+may notify for the missed occurrence while Atom separately schedules their next
+future occurrence. If notification access is blocked, Atom keeps a bounded,
+deduplicated local backlog of missed occurrences and retries it after access is
+restored; advancing a recurrence never silently discards its blocked alert.
+
 The Settings screen reports notification permission, exact-alarm permission,
 battery optimization risk, and the time of the last successful reconciliation.
+The status refreshes after returning from Android settings. Atom also reruns
+reconciliation when exact-alarm access changes.
 
 ## Delivery actions
 

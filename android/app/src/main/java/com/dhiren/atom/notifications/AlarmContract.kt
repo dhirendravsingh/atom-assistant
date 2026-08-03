@@ -9,6 +9,9 @@ object AlarmContract {
     const val ActionSnooze = "com.dhiren.atom.action.SNOOZE_REMINDER"
     const val ActionRemindAgain = "com.dhiren.atom.action.REMIND_AGAIN"
     const val ActionDismissAlarmUi = "com.dhiren.atom.action.DISMISS_ALARM_UI"
+    const val ActionOpenMissed = "com.dhiren.atom.action.OPEN_MISSED_REMINDER"
+    const val ActionExactAlarmPermissionStateChanged =
+        "android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED"
 
     const val ExtraReminderId = "extra_reminder_id"
     const val ExtraReminderTitle = "extra_reminder_title"

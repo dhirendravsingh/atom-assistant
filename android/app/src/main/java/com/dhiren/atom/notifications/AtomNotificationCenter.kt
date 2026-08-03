@@ -15,7 +15,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.dhiren.atom.AlarmActivity
+import com.dhiren.atom.MainActivity
 import com.dhiren.atom.R
+import java.time.Instant
 
 class AtomNotificationCenter(context: Context) {
     private val appContext = context.applicationContext
@@ -46,12 +48,7 @@ class AtomNotificationCenter(context: Context) {
     }
 
     fun showReminder(reminderId: Long, title: String): Boolean {
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            ContextCompat.checkSelfPermission(appContext, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return false
-        }
+        if (!canPostNotifications()) return false
         createChannels()
         val fullScreenIntent = PendingIntent.getActivity(
             appContext,
@@ -83,12 +80,71 @@ class AtomNotificationCenter(context: Context) {
             builder.setFullScreenIntent(fullScreenIntent, true)
         }
         val notification = builder.build()
-        NotificationManagerCompat.from(appContext).notify(AlarmContract.notificationId(reminderId), notification)
-        return true
+        return postNotification(reminderId, notification)
+    }
+
+    fun showMissedReminder(
+        reminderId: Long,
+        title: String,
+        scheduledAt: Instant,
+    ): Boolean {
+        if (!canPostNotifications()) return false
+        createChannels()
+        val contentIntent = PendingIntent.getActivity(
+            appContext,
+            AlarmContract.stableRequestCode(reminderId, 4),
+            Intent(appContext, MainActivity::class.java).apply {
+                action = AlarmContract.ActionOpenMissed
+                data = Uri.parse("atom://reminder/$reminderId/missed")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val notification = NotificationCompat.Builder(appContext, AlarmContract.ReminderChannelId)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("Missed reminder")
+            .setContentText(title)
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$title\nAtom restored this reminder after the device was unavailable."))
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setWhen(scheduledAt.toEpochMilli())
+            .setShowWhen(true)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            .setContentIntent(contentIntent)
+            .addAction(0, "Done", actionPendingIntent(reminderId, title, AlarmContract.ActionDone, 1))
+            .addAction(0, "Snooze 10 min", actionPendingIntent(reminderId, title, AlarmContract.ActionSnooze, 2))
+            .addAction(0, "Remind in 1 hour", actionPendingIntent(reminderId, title, AlarmContract.ActionRemindAgain, 3))
+            .build()
+        return postNotification(reminderId, notification)
     }
 
     fun dismiss(reminderId: Long) {
         systemManager.cancel(AlarmContract.notificationId(reminderId))
+    }
+
+    private fun canPostNotifications(): Boolean {
+        val runtimePermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                appContext,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+        val reminderChannelEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+            systemManager.getNotificationChannel(AlarmContract.ReminderChannelId)?.importance != NotificationManager.IMPORTANCE_NONE
+        return runtimePermissionGranted &&
+            NotificationManagerCompat.from(appContext).areNotificationsEnabled() &&
+            reminderChannelEnabled
+    }
+
+    private fun postNotification(reminderId: Long, notification: android.app.Notification): Boolean = try {
+        NotificationManagerCompat.from(appContext).notify(
+            AlarmContract.notificationId(reminderId),
+            notification,
+        )
+        true
+    } catch (_: SecurityException) {
+        false
     }
 
     private fun actionPendingIntent(

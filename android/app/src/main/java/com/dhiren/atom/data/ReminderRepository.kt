@@ -3,6 +3,9 @@ package com.dhiren.atom.data
 import com.dhiren.atom.data.local.ReminderDao
 import com.dhiren.atom.data.local.ReminderEntity
 import com.dhiren.atom.notifications.AlarmScheduleCalculator
+import com.dhiren.atom.notifications.AlarmReconciliationReason
+import com.dhiren.atom.notifications.AlarmReconciliationResult
+import com.dhiren.atom.notifications.MissedReminderOccurrence
 import com.dhiren.atom.notifications.NoOpReminderAlarmScheduler
 import com.dhiren.atom.notifications.ReminderAlarmScheduler
 import com.dhiren.atom.ui.ReminderAccent
@@ -130,17 +133,89 @@ class ReminderRepository(
         alarmScheduler.schedule(id, updated.title, nextTrigger)
     }
 
-    suspend fun reconcileAlarms() {
+    suspend fun reconcileAlarms(
+        reason: AlarmReconciliationReason = AlarmReconciliationReason.AppStart,
+    ): AlarmReconciliationResult {
+        val now = Instant.now(clock)
+        val missedOccurrences = mutableListOf<MissedReminderOccurrence>()
+        var scheduledAlarmCount = 0
         reminderDao.getScheduled().forEach { reminder ->
             alarmScheduler.cancel(reminder.id)
-            scheduleIfEligible(reminder)
+            val storedTrigger = reminder.scheduledAtUtc?.let { runCatching { Instant.parse(it) }.getOrNull() }
+            if (storedTrigger != null && !storedTrigger.isAfter(now)) {
+                missedOccurrences += MissedReminderOccurrence(
+                    reminderId = reminder.id,
+                    title = reminder.title,
+                    scheduledAt = storedTrigger,
+                    recurring = reminder.recurrenceRule != null,
+                )
+                if (reminder.recurrenceRule != null) {
+                    nextRecurringTrigger(reminder, now)?.let { trigger ->
+                        persistRecurringTrigger(reminder, trigger, now)
+                        alarmScheduler.schedule(reminder.id, reminder.title, trigger)
+                        scheduledAlarmCount += 1
+                    }
+                }
+                return@forEach
+            }
+
+            val trigger = when {
+                reason.recalculateRecurringSchedules && reminder.recurrenceRule != null ->
+                    nextRecurringTrigger(reminder, now)
+                else -> AlarmScheduleCalculator.nextTrigger(reminder, now)
+            } ?: return@forEach
+            if (reminder.recurrenceRule != null && trigger != storedTrigger) {
+                persistRecurringTrigger(reminder, trigger, now)
+            }
+            alarmScheduler.schedule(reminder.id, reminder.title, trigger)
+            scheduledAlarmCount += 1
         }
+        return AlarmReconciliationResult(
+            completedAt = now,
+            scheduledAlarmCount = scheduledAlarmCount,
+            missedOccurrences = missedOccurrences,
+        )
+    }
+
+    suspend fun markMissed(id: Long, expectedScheduledAt: Instant) {
+        val existing = reminderDao.getById(id) ?: return
+        if (
+            existing.recurrenceRule != null ||
+            existing.state != ReminderState.Scheduled.name ||
+            existing.scheduledAtUtc != expectedScheduledAt.toString()
+        ) return
+        reminderDao.upsert(
+            existing.copy(
+                state = ReminderState.Missed.name,
+                updatedAtUtc = Instant.now(clock).toString(),
+            ),
+        )
     }
 
     private fun scheduleIfEligible(reminder: ReminderEntity) {
         AlarmScheduleCalculator.nextTrigger(reminder, Instant.now(clock))?.let { trigger ->
             alarmScheduler.schedule(reminder.id, reminder.title, trigger)
         }
+    }
+
+    private fun nextRecurringTrigger(reminder: ReminderEntity, now: Instant): Instant? =
+        AlarmScheduleCalculator.nextTrigger(reminder.copy(scheduledAtUtc = null), now.plusSeconds(1))
+
+    private suspend fun persistRecurringTrigger(
+        reminder: ReminderEntity,
+        trigger: Instant,
+        now: Instant,
+    ) {
+        val zone = runCatching { ZoneId.of(reminder.timezone) }.getOrDefault(zoneProvider())
+        val localTrigger = trigger.atZone(zone)
+        reminderDao.upsert(
+            reminder.copy(
+                scheduledAtUtc = trigger.toString(),
+                localDate = localTrigger.toLocalDate().toString(),
+                localTime = localTrigger.toLocalTime().withSecond(0).withNano(0).format(DatabaseTimeFormatter),
+                updatedAtUtc = now.toString(),
+            ),
+        )
     }
 }
 

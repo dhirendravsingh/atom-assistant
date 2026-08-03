@@ -3,6 +3,7 @@ package com.dhiren.atom.data
 import com.dhiren.atom.data.local.ReminderDao
 import com.dhiren.atom.data.local.ReminderEntity
 import com.dhiren.atom.notifications.ReminderAlarmScheduler
+import com.dhiren.atom.notifications.AlarmReconciliationReason
 import com.dhiren.atom.ui.ReminderAccent
 import com.dhiren.atom.ui.ReminderState
 import com.dhiren.atom.ui.ReminderUi
@@ -79,6 +80,84 @@ class ReminderRepositoryAlarmTest {
         assertEquals(listOf("schedule:14:2026-08-01T13:00:00Z", "cancel:13"), scheduler.events)
     }
 
+    @Test
+    fun `reboot reconciliation restores a future alarm`() = runBlocking {
+        val dao = FakeReminderDao(entity(id = 17L, scheduledAtUtc = "2026-08-01T12:20:00Z"))
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        val result = repository.reconcileAlarms(AlarmReconciliationReason.Boot)
+
+        assertEquals(1, result.scheduledAlarmCount)
+        assertTrue(result.missedOccurrences.isEmpty())
+        assertEquals(listOf("cancel:17", "schedule:17:2026-08-01T12:20:00Z"), scheduler.events)
+    }
+
+    @Test
+    fun `reconciliation reports a missed one off without scheduling it in the past`() = runBlocking {
+        val dao = FakeReminderDao(entity(id = 19L, scheduledAtUtc = "2026-08-01T11:50:00Z"))
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        val result = repository.reconcileAlarms(AlarmReconciliationReason.AppStart)
+
+        assertEquals(0, result.scheduledAlarmCount)
+        assertEquals(19L, result.missedOccurrences.single().reminderId)
+        assertEquals(Instant.parse("2026-08-01T11:50:00Z"), result.missedOccurrences.single().scheduledAt)
+        assertEquals(listOf("cancel:19"), scheduler.events)
+    }
+
+    @Test
+    fun `missed recurring occurrence is reported and advanced to the next future alarm`() = runBlocking {
+        val dao = FakeReminderDao(
+            entity(
+                id = 21L,
+                scheduledAtUtc = "2026-08-01T11:50:00Z",
+                localTime = "09:00",
+                recurrenceRule = "FREQ=DAILY",
+            ),
+        )
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        val result = repository.reconcileAlarms(AlarmReconciliationReason.Boot)
+
+        assertTrue(result.missedOccurrences.single().recurring)
+        assertEquals("2026-08-02T03:30:00Z", dao.entities.value.single().scheduledAtUtc)
+        assertEquals(listOf("cancel:21", "schedule:21:2026-08-02T03:30:00Z"), scheduler.events)
+    }
+
+    @Test
+    fun `clock changes recalculate a future recurring occurrence from local time`() = runBlocking {
+        val dao = FakeReminderDao(
+            entity(
+                id = 23L,
+                scheduledAtUtc = "2026-08-03T03:30:00Z",
+                localTime = "09:00",
+                recurrenceRule = "FREQ=DAILY",
+            ),
+        )
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        repository.reconcileAlarms(AlarmReconciliationReason.ClockChanged)
+
+        assertEquals("2026-08-02T03:30:00Z", dao.entities.value.single().scheduledAtUtc)
+        assertEquals(listOf("cancel:23", "schedule:23:2026-08-02T03:30:00Z"), scheduler.events)
+    }
+
+    @Test
+    fun `mark missed changes only the expected one off occurrence`() = runBlocking {
+        val dueAt = Instant.parse("2026-08-01T11:50:00Z")
+        val dao = FakeReminderDao(entity(id = 25L, scheduledAtUtc = dueAt.toString()))
+        val repository = ReminderRepository(dao, clock, { timezone }, RecordingScheduler())
+
+        repository.markMissed(25L, dueAt)
+
+        assertEquals("Missed", dao.entities.value.single().state)
+        assertEquals(dueAt.toString(), dao.entities.value.single().scheduledAtUtc)
+    }
+
     private fun reminder(id: Long, date: String?, time: String?) = ReminderUi(
         id = id,
         title = "Review priorities",
@@ -91,15 +170,20 @@ class ReminderRepositoryAlarmTest {
         timezone = timezone.id,
     )
 
-    private fun entity(id: Long, scheduledAtUtc: String?) = ReminderEntity(
+    private fun entity(
+        id: Long,
+        scheduledAtUtc: String?,
+        localTime: String = "17:30",
+        recurrenceRule: String? = null,
+    ) = ReminderEntity(
         id = id,
         title = "Review priorities",
         sourceText = "Remind me to review priorities",
         scheduledAtUtc = scheduledAtUtc,
         localDate = "2026-08-01",
-        localTime = "17:30",
+        localTime = localTime,
         timezone = timezone.id,
-        recurrenceRule = null,
+        recurrenceRule = recurrenceRule,
         source = "Text",
         state = "Scheduled",
         accent = "Mint",

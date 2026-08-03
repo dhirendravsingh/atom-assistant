@@ -16,12 +16,16 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         if (reminderId <= 0L) return
         val title = intent.getStringExtra(AlarmContract.ExtraReminderTitle).orEmpty().ifBlank { "Reminder" }
         val application = context.applicationContext as AtomApplication
-        application.notificationCenter.showReminder(reminderId, title)
+        val delivered = application.notificationCenter.showReminder(reminderId, title)
 
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                application.reminderRepository.advanceRecurringAfterDelivery(reminderId)
+                if (delivered) {
+                    application.reminderRepository.advanceRecurringAfterDelivery(reminderId)
+                } else {
+                    application.deviceReliabilityManager.reconcile(AlarmReconciliationReason.DeliveryRecovery)
+                }
             } finally {
                 pendingResult.finish()
             }

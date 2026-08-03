@@ -20,6 +20,7 @@ import com.dhiren.atom.speech.AtomSpeechRecognizer
 import com.dhiren.atom.speech.SpeechCaptureState
 import com.dhiren.atom.speech.SpeechInputTarget
 import com.dhiren.atom.notifications.AlarmPreferences
+import com.dhiren.atom.notifications.AlarmReconciliationReason
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -148,6 +149,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.LocalTime
@@ -841,7 +845,17 @@ private fun Context.openNotificationRepairSettings() {
             Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", packageName, null))
         else -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
     }
-    startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .getOrElse { openAtomAppSettings() }
+}
+
+private fun Context.openBatteryOptimizationSettings() {
+    runCatching {
+        startActivity(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.getOrElse { openAtomAppSettings() }
 }
 
 @Composable
@@ -1505,6 +1519,7 @@ private fun RemindersScreen(
             "Scheduled" -> it.state == ReminderState.Scheduled
             "Needs details" -> it.state in setOf(ReminderState.NeedsDate, ReminderState.NeedsTime, ReminderState.Unscheduled)
             "Repeats" -> it.recurrence != null
+            "Missed" -> it.state == ReminderState.Missed
             "Completed" -> it.state == ReminderState.Completed
             else -> true
         }
@@ -1529,7 +1544,7 @@ private fun RemindersScreen(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf("All", "Scheduled", "Needs details", "Repeats", "Completed").forEach { option ->
+                    listOf("All", "Scheduled", "Needs details", "Missed", "Repeats", "Completed").forEach { option ->
                         FilterChip(option, option == filter) { filter = option }
                     }
                 }
@@ -1614,6 +1629,17 @@ private fun ReminderCard(reminder: ReminderUi, onEdit: () -> Unit, onDelete: () 
                         Spacer(Modifier.width(4.dp))
                         Text(it, color = colors.mintDark, style = MaterialTheme.typography.labelMedium)
                     }
+                    if (reminder.state == ReminderState.Missed) {
+                        Spacer(Modifier.width(7.dp))
+                        Surface(color = colors.coralPale, shape = RoundedCornerShape(50)) {
+                            Text(
+                                "Missed",
+                                color = colors.coral,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1649,25 +1675,42 @@ private fun SettingsScreen(
     val colors = LocalAtomPalette.current
     val context = LocalContext.current
     val alarmPreferences = remember(context) { AlarmPreferences(context) }
+    val reliabilityManager = remember(context) {
+        (context.applicationContext as AtomApplication).deviceReliabilityManager
+    }
+    val reliabilityMonitor = reliabilityManager.monitor
+    val reliabilityScope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var reliabilityRefresh by remember { mutableStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                reliabilityScope.launch {
+                    reliabilityManager.reconcile(AlarmReconciliationReason.AppStart)
+                    reliabilityRefresh += 1
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var alarmMode by rememberSaveable { mutableStateOf(alarmPreferences.alarmModeEnabled) }
     var aiFallback by rememberSaveable { mutableStateOf(false) }
     var showPrefixes by rememberSaveable { mutableStateOf(false) }
     val locale = remember { Locale.getDefault().displayName }
     val timezone = remember { ZoneId.systemDefault().id }
-    val notificationPermissionReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    val exactAlarmReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
-        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
-    val fullScreenReady = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
-        context.getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
-    val notificationHealthy = notificationPermissionReady && exactAlarmReady && (!alarmMode || fullScreenReady)
-    val notificationHealthText = listOfNotNull(
-        if (!notificationPermissionReady) "notification permission" else null,
-        if (!exactAlarmReady) "exact alarm access" else null,
-        if (alarmMode && !fullScreenReady) "full-screen access" else null,
-    ).let { missing ->
+    val reliability = remember(reliabilityRefresh) { reliabilityMonitor.snapshot() }
+    val missingAlarmRequirements = reliability.missingAlarmRequirements(alarmMode)
+    val notificationHealthy = missingAlarmRequirements.isEmpty()
+    val notificationHealthText = missingAlarmRequirements.let { missing ->
         if (missing.isEmpty()) "Sound, vibration, and alarm access ready" else "Needs ${missing.joinToString()}"
     }
+    val reconciliationText = reliability.lastSuccessfulReconciliation?.let { instant ->
+        val checkedAt = instant.atZone(ZoneId.systemDefault()).format(
+            DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.getDefault()),
+        )
+        "Last checked $checkedAt · ${reliability.lastReconciliationReason?.displayLabel ?: "device event"}"
+    } ?: "Runs after launch, reboot, updates, and clock changes"
 
     ScreenFrame {
         Column(
@@ -1760,6 +1803,27 @@ private fun SettingsScreen(
                     subtitle = notificationHealthText,
                     badge = if (notificationHealthy) "Ready" else "Repair",
                     onClick = { if (!notificationHealthy) context.openNotificationRepairSettings() },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.NotificationsNone,
+                    title = "Battery optimization",
+                    subtitle = if (reliability.batteryOptimizationExempt) {
+                        "Atom is exempt from Android battery restrictions"
+                    } else {
+                        "Android or the device maker may delay background work"
+                    },
+                    badge = if (reliability.batteryOptimizationExempt) "Ready" else "Review",
+                    onClick = {
+                        if (!reliability.batteryOptimizationExempt) context.openBatteryOptimizationSettings()
+                    },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Schedule,
+                    title = "Alarm restoration",
+                    subtitle = reconciliationText,
+                    badge = "Active",
                 )
             }
             Spacer(Modifier.height(22.dp))

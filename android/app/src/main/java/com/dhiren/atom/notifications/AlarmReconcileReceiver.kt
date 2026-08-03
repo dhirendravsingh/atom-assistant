@@ -11,20 +11,21 @@ import kotlinx.coroutines.launch
 
 class AlarmReconcileReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (
-            intent.action !in setOf(
-                Intent.ACTION_BOOT_COMPLETED,
-                Intent.ACTION_MY_PACKAGE_REPLACED,
-                Intent.ACTION_TIME_CHANGED,
-                Intent.ACTION_TIMEZONE_CHANGED,
-                Intent.ACTION_LOCALE_CHANGED,
-            )
-        ) return
+        val reason = when (intent.action) {
+            Intent.ACTION_BOOT_COMPLETED -> AlarmReconciliationReason.Boot
+            Intent.ACTION_MY_PACKAGE_REPLACED -> AlarmReconciliationReason.AppUpdate
+            Intent.ACTION_TIME_CHANGED -> AlarmReconciliationReason.ClockChanged
+            Intent.ACTION_TIMEZONE_CHANGED -> AlarmReconciliationReason.TimezoneChanged
+            Intent.ACTION_LOCALE_CHANGED -> AlarmReconciliationReason.LocaleChanged
+            AlarmContract.ActionExactAlarmPermissionStateChanged ->
+                AlarmReconciliationReason.ExactAlarmPermissionChanged
+            else -> return
+        }
         val application = context.applicationContext as AtomApplication
         val pendingResult = goAsync()
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
-                application.reminderRepository.reconcileAlarms()
+                application.deviceReliabilityManager.reconcile(reason)
             } finally {
                 pendingResult.finish()
             }

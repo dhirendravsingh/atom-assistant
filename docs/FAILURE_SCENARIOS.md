@@ -15,7 +15,8 @@
 | Exact alarms unavailable | Explain reduced precision and offer the Android permission screen |
 | Device reboot or app upgrade | Reconcile all future alarms from Room |
 | Timezone or clock changes | Recompute future occurrences from stored local values and IANA timezone |
-| Device is off at trigger time | Show a missed-reminder notification after boot if still relevant |
+| Device is off at trigger time | After boot, show one missed-reminder notification when the occurrence is at most 24 hours old; retain older one-offs in the Missed list without a noisy alert |
+| Battery optimization is active | Show a reliability warning and link to Android's battery-optimization settings without claiming alarms are guaranteed |
 | App is force-stopped | Show an explicit reliability warning after next launch |
 | Railway is offline | Continue locally and queue idempotent sync operations |
 | Sync conflict | Prefer the latest owner-confirmed mutation; retain an audit entry |
