@@ -2,10 +2,10 @@
 
 ## Reliability model
 
-The Android application is offline-first. Room is the source of truth on the
-phone; Railway PostgreSQL is an optional encrypted sync and backup copy. A
-network connection is not required to create, edit, ring, snooze, complete, or
-cancel a reminder.
+The Android application is offline-first. Room is the only Phase 1 source of
+truth on the phone. Railway PostgreSQL is deferred to an optional Phase 2
+encrypted synchronization and backup copy. A network connection is not
+required to create, edit, ring, snooze, complete, or cancel a reminder.
 
 For each complete schedule Atom creates a local Android alarm:
 

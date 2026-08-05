@@ -39,6 +39,9 @@ Room creates the private `atom.db` database automatically on first use. The
 database contains the single owner profile and normalized reminder records.
 No external database initialization or credentials are required.
 
-## Not connected yet
+## Deferred work
 
-The next implementation milestones will add Android exact alarms and notifications, speech recognition, reboot recovery, Railway/PostgreSQL sync, and an opt-in OpenAI parser fallback. No API key belongs in the Android package.
+Phase 1 uses Room and Android device services only. Railway/PostgreSQL backup,
+the synchronization API, offline network outbox, and conflict resolution are
+deferred to Phase 2. An opt-in OpenAI parser fallback is also deferred. No API
+key belongs in the Android package.

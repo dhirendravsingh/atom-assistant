@@ -9,9 +9,9 @@ This repository currently contains two complementary surfaces:
 
 ## Current status
 
-The Android Phase 1 UI is implemented: light/dark themes, time-aware greeting, animated quick capture, 14 Atom marks, capture/review/follow-up flows, reminder editing, recurring reminder presentation, settings, and a full-screen Alarm Mode preview.
+The Android Phase 1 experience is implemented: light/dark themes, time-aware greeting, animated quick capture, 14 Atom marks, capture/review/follow-up flows, reminder editing, recurrence, settings, and full-screen Alarm Mode.
 
-Durable offline Room storage is connected: reminders now survive application restarts and the single owner profile is initialized automatically on first use. Android alarm scheduling, on-device speech recognition, notification channels, reboot recovery, Railway sync, and the optional OpenAI fallback are not connected yet. The UI labels these boundaries instead of pretending they are live.
+Durable Room storage, deterministic parsing, Android speech recognition, local alarm scheduling, notification actions, and device lifecycle recovery are connected. Phase 1 is intentionally local-only: no Railway service, PostgreSQL database, account, or synchronization queue is required. Optional Railway backup and synchronization are deferred to Phase 2, and the optional OpenAI fallback is not connected.
 
 ## Run the Android app
 
@@ -51,8 +51,9 @@ Then open `http://localhost:3000`.
 - `docs/PRIVACY.md`
 - `docs/FAILURE_SCENARIOS.md`
 - `docs/LOCAL_DATABASE.md`
+- `docs/ROADMAP.md`
 - `docs/changelog/` — one changelog fragment per pull request
 
 ## Repository safety
 
-Signing keys, local Android SDK paths, environment files, and generated build output are excluded from Git. Keep the eventual release keystore and Railway/OpenAI credentials outside the repository.
+Signing keys, local Android SDK paths, environment files, and generated build output are excluded from Git. Keep the release keystore and any future Phase 2 Railway/OpenAI credentials outside the repository.

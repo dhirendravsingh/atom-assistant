@@ -37,5 +37,6 @@ to display all times in 12-hour format with AM or PM.
 - Future schema changes must increment the database version and include a
   tested Room migration. Exported schemas live under `android/app/schemas/`.
 
-Railway PostgreSQL remains an optional future synchronization and backup layer;
-it does not replace Room or affect offline reminder creation.
+Phase 1 has no external database. Railway PostgreSQL is deferred to the optional
+Phase 2 backup and synchronization work described in `ROADMAP.md`. Even then,
+it must not replace Room or affect offline reminder creation and delivery.

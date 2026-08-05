@@ -18,7 +18,7 @@
 | Device is off at trigger time | After boot, show one missed-reminder notification when the occurrence is at most 24 hours old; retain older one-offs in the Missed list without a noisy alert |
 | Battery optimization is active | Show a reliability warning and link to Android's battery-optimization settings without claiming alarms are guaranteed |
 | App is force-stopped | Show an explicit reliability warning after next launch |
-| Railway is offline | Continue locally and queue idempotent sync operations |
+| Phase 2 Railway is offline | Continue locally from Room and queue idempotent sync operations; Phase 1 has no server dependency |
 | Sync conflict | Prefer the latest owner-confirmed mutation; retain an audit entry |
 | Local alarm and push both arrive | Dedupe by occurrence ID and display only once |
 | Edit scheduling fails | Restore or retry the prior alarm and mark the reminder as needing attention |
