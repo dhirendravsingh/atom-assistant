@@ -79,12 +79,30 @@ class AlarmScheduleCalculatorTest {
         assertNull(AlarmScheduleCalculator.nextTrigger(reminder, now))
     }
 
+    @Test
+    fun `daily recurrence keeps its wall time across spring daylight saving`() {
+        val beforeDst = Instant.parse("2026-03-07T15:00:00Z")
+        val reminder = reminder(
+            scheduledAtUtc = null,
+            localDate = "2026-03-07",
+            localTime = "09:00",
+            recurrenceRule = "FREQ=DAILY",
+            timezone = "America/New_York",
+        )
+
+        assertEquals(
+            Instant.parse("2026-03-08T13:00:00Z"),
+            AlarmScheduleCalculator.nextTrigger(reminder, beforeDst),
+        )
+    }
+
     private fun reminder(
         scheduledAtUtc: String?,
         localDate: String? = "2026-08-01",
         localTime: String? = "17:30",
         recurrenceRule: String? = null,
         state: String = "Scheduled",
+        timezone: String = "Asia/Kolkata",
     ) = ReminderEntity(
         id = 8L,
         title = "Review priorities",
@@ -92,7 +110,7 @@ class AlarmScheduleCalculatorTest {
         scheduledAtUtc = scheduledAtUtc,
         localDate = localDate,
         localTime = localTime,
-        timezone = "Asia/Kolkata",
+        timezone = timezone,
         recurrenceRule = recurrenceRule,
         source = "Text",
         state = state,

@@ -1,8 +1,33 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
     id("androidx.room")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+val releaseKeystorePath = providers.environmentVariable("ATOM_RELEASE_KEYSTORE").orNull
+val releaseStorePassword = providers.environmentVariable("ATOM_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyPassword = providers.environmentVariable("ATOM_RELEASE_KEY_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("ATOM_RELEASE_KEY_ALIAS").orElse("atom-release").get()
+val releaseSigningReady = listOf(
+    releaseKeystorePath,
+    releaseStorePassword,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+val signedReleaseTasks = setOf("assembleRelease", "bundleRelease", "packageRelease")
+val releaseTaskRequested = gradle.startParameter.taskNames.any { requestedTask ->
+    requestedTask.substringAfterLast(':') in signedReleaseTasks
+}
+
+if (releaseTaskRequested) {
+    check(releaseSigningReady) {
+        "Release signing requires ATOM_RELEASE_KEYSTORE, ATOM_RELEASE_STORE_PASSWORD, and ATOM_RELEASE_KEY_PASSWORD."
+    }
+    check(File(requireNotNull(releaseKeystorePath)).isFile) {
+        "ATOM_RELEASE_KEYSTORE does not point to a readable keystore file."
+    }
 }
 
 android {
@@ -20,9 +45,26 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (releaseSigningReady) {
+            create("release") {
+                storeFile = file(requireNotNull(releaseKeystorePath))
+                storePassword = requireNotNull(releaseStorePassword)
+                keyAlias = releaseKeyAlias
+                keyPassword = requireNotNull(releaseKeyPassword)
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.findByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -72,6 +114,7 @@ dependencies {
     testImplementation("androidx.room:room-testing:$roomVersion")
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:core:1.7.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.room:room-testing:$roomVersion")

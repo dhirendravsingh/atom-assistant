@@ -580,26 +580,32 @@ export default function HomePage() {
   const [detectedLocale, setDetectedLocale] = useState("English (India)");
 
   useEffect(() => {
-    const preferredTheme = window.localStorage.getItem("atom-theme");
-    if (preferredTheme === "dark" || preferredTheme === "light") {
-      setTheme(preferredTheme);
-    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      setTheme("dark");
-    }
+    const hydrateDevicePreferences = () => {
+      const preferredTheme = window.localStorage.getItem("atom-theme");
+      if (preferredTheme === "dark" || preferredTheme === "light") {
+        setTheme(preferredTheme);
+      } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+        setTheme("dark");
+      }
 
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    if (zone) setDetectedTimezone(zone);
-    if (navigator.language) {
-      const displayName = new Intl.DisplayNames(["en"], { type: "language" });
-      const languageName = displayName.of(navigator.language.split("-")[0]);
-      setDetectedLocale(
-        `${languageName ?? "English"}${navigator.language.includes("-") ? ` (${navigator.language.split("-")[1].toUpperCase()})` : ""}`,
-      );
-    }
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (zone) setDetectedTimezone(zone);
+      if (navigator.language) {
+        const displayName = new Intl.DisplayNames(["en"], { type: "language" });
+        const languageName = displayName.of(navigator.language.split("-")[0]);
+        setDetectedLocale(
+          `${languageName ?? "English"}${navigator.language.includes("-") ? ` (${navigator.language.split("-")[1].toUpperCase()})` : ""}`,
+        );
+      }
+      setCurrentTime(new Date());
+    };
 
-    setCurrentTime(new Date());
+    const frame = window.requestAnimationFrame(hydrateDevicePreferences);
     const timer = window.setInterval(() => setCurrentTime(new Date()), 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
