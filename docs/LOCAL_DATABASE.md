@@ -5,12 +5,13 @@ SQLite file named `atom.db` automatically when the application first accesses
 the database. The owner does not need to provision a service, create
 credentials, or initialize a database manually.
 
-## Version 1 schema
+## Version 2 schema
 
 ### `owner_profile`
 
-The single row stores the Phase 1 owner identity, detected IANA timezone and
-device locale. The row is inserted only when a new database is created.
+The single row stores the editable display name, gender option, pronoun option,
+detected IANA timezone, and device locale. The row is inserted only when a new
+database is created.
 
 ### `reminders`
 
@@ -37,5 +38,10 @@ to display all times in 12-hour format with AM or PM.
 - Future schema changes must increment the database version and include a
   tested Room migration. Exported schemas live under `android/app/schemas/`.
 
-Railway PostgreSQL remains an optional future synchronization and backup layer;
-it does not replace Room or affect offline reminder creation.
+Migration 1 → 2 adds gender and pronouns without deleting reminders. It also
+normalizes the original `Dhiren Sir` value to `Dhiren`, because the greeting now
+adds `Sir` dynamically from the selected gender.
+
+Phase 1 has no external database. Railway PostgreSQL is deferred to the optional
+Phase 2 backup and synchronization work described in `ROADMAP.md`. Even then,
+it must not replace Room or affect offline reminder creation and delivery.

@@ -15,6 +15,7 @@ enum class ReminderState {
     NeedsTime,
     NeedsDate,
     Unscheduled,
+    Missed,
     Completed,
     Canceled,
 }

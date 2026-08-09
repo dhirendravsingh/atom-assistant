@@ -2,9 +2,20 @@
 
 ## Identity
 
-Atom is a private, single-owner reminder assistant. In Phase 1 the owner name is
-hardcoded as **Dhiren Sir**. Atom must not expose multi-user controls or imply
-that another account can use this installation.
+Atom is a private, single-owner reminder assistant. The local profile defaults
+to Dhiren, Man, and He / him, and the owner may edit the name, gender, and
+pronouns from Settings. This personalization does not create another account
+or imply that multiple owners can use the installation.
+
+The greeting combines the chosen name with a gender-aware form of address:
+
+- Man: `<name> Sir`
+- Woman: `<name> Ma'am`
+- Non-binary or Prefer not to say: `<name>`
+
+Pronouns are stored for respectful future copy and shown in the profile, but
+they are not used to infer gender or silently change the selected form of
+address.
 
 The home greeting follows the device's local time:
 
@@ -59,4 +70,3 @@ The deterministic parser is primary. Optional OpenAI fallback is allowed only
 when enabled by the owner and only after a failed or low-confidence local parse.
 Atom must show the fallback result for confirmation. It must not let a model
 directly schedule, edit, or delete a reminder.
-

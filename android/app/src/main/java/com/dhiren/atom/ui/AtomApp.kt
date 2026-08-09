@@ -1,12 +1,34 @@
 package com.dhiren.atom.ui
 
+import android.Manifest
+import android.app.AlarmManager
 import android.app.Activity
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import com.dhiren.atom.AtomApplication
+import com.dhiren.atom.data.GenderOption
+import com.dhiren.atom.data.OwnerProfile
+import com.dhiren.atom.data.PronounOption
 import com.dhiren.atom.nlp.AtomCommandParser
 import com.dhiren.atom.nlp.CommandIntent
 import com.dhiren.atom.nlp.MissingField
 import com.dhiren.atom.nlp.ParsedCommand
 import com.dhiren.atom.nlp.ReminderContext
+import com.dhiren.atom.speech.AtomSpeechRecognizer
+import com.dhiren.atom.speech.SpeechCaptureState
+import com.dhiren.atom.speech.SpeechInputTarget
+import com.dhiren.atom.notifications.AlarmPreferences
+import com.dhiren.atom.notifications.AlarmReconciliationReason
+import com.dhiren.atom.permissions.InitialPermissionOnboardingPreferences
+import com.dhiren.atom.permissions.InitialPermissionStep
+import com.dhiren.atom.permissions.initialPermissionPlan
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -24,6 +46,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -67,16 +91,14 @@ import androidx.compose.material.icons.rounded.KeyboardVoice
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.ListAlt
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
-import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -89,7 +111,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -99,6 +120,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -121,6 +144,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -133,6 +157,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.LocalTime
@@ -143,8 +171,6 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 
-private const val OwnerName = "Dhiren Sir"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AtomApp() {
@@ -152,7 +178,11 @@ fun AtomApp() {
     val reminderRepository = remember(context) {
         (context.applicationContext as AtomApplication).reminderRepository
     }
+    val ownerProfileRepository = remember(context) {
+        (context.applicationContext as AtomApplication).ownerProfileRepository
+    }
     val reminders by reminderRepository.reminders.collectAsState(initial = emptyList())
+    val ownerProfile by ownerProfileRepository.profile.collectAsState(initial = OwnerProfile.Default)
     val persistenceScope = rememberCoroutineScope()
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     var darkTheme by rememberSaveable { mutableStateOf(systemDark) }
@@ -161,6 +191,117 @@ fun AtomApp() {
     var showLogoGallery by rememberSaveable { mutableStateOf(false) }
     var showAlarmPreview by rememberSaveable { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderUi?>(null) }
+    var pendingNotificationSave by remember { mutableStateOf<ReminderUi?>(null) }
+    val permissionOnboardingPreferences = remember(context) {
+        InitialPermissionOnboardingPreferences(context)
+    }
+    val firstLaunchPermissionPlan = remember(context) { context.pendingInitialPermissionSteps() }
+    var showInitialPermissionSetup by rememberSaveable {
+        mutableStateOf(
+            !permissionOnboardingPreferences.completed && firstLaunchPermissionPlan.isNotEmpty(),
+        )
+    }
+    var permissionSetupStep by remember { mutableStateOf<InitialPermissionStep?>(null) }
+
+    fun persistReminder(reminder: ReminderUi) {
+        persistenceScope.launch {
+            reminderRepository.save(reminder)
+        }
+        editingReminder = null
+        currentScreen = AtomScreen.Reminders
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        pendingNotificationSave?.let(::persistReminder)
+        pendingNotificationSave = null
+    }
+
+    val initialNotificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.Microphone
+    }
+    val initialMicrophonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.ExactAlarms
+    }
+    val initialExactAlarmAccessLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+    }
+    val initialFullScreenAlarmAccessLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        permissionOnboardingPreferences.completed = true
+        permissionSetupStep = null
+    }
+
+    LaunchedEffect(firstLaunchPermissionPlan) {
+        if (firstLaunchPermissionPlan.isEmpty()) {
+            permissionOnboardingPreferences.completed = true
+        }
+    }
+    LaunchedEffect(permissionSetupStep) {
+        when (permissionSetupStep) {
+            InitialPermissionStep.Notifications -> {
+                if (
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionSetupStep = InitialPermissionStep.Microphone
+                } else {
+                    initialNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+
+            InitialPermissionStep.Microphone -> {
+                if (
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionSetupStep = InitialPermissionStep.ExactAlarms
+                } else {
+                    initialMicrophonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+
+            InitialPermissionStep.ExactAlarms -> {
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    !context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+                ) {
+                    runCatching {
+                        initialExactAlarmAccessLauncher.launch(context.exactAlarmSettingsIntent())
+                    }.onFailure {
+                        context.openAtomAppSettings()
+                        permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+                    }
+                } else {
+                    permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+                }
+            }
+
+            InitialPermissionStep.FullScreenAlarms -> {
+                if (!context.hasFullScreenAlarmAccess()) {
+                    runCatching {
+                        initialFullScreenAlarmAccessLauncher.launch(context.fullScreenAlarmSettingsIntent())
+                    }.onFailure {
+                        context.openAtomAppSettings()
+                        permissionOnboardingPreferences.completed = true
+                        permissionSetupStep = null
+                    }
+                } else {
+                    permissionOnboardingPreferences.completed = true
+                    permissionSetupStep = null
+                }
+            }
+
+            null -> Unit
+        }
+    }
 
     AtomTheme(darkTheme = darkTheme) {
         val colors = LocalAtomPalette.current
@@ -204,6 +345,7 @@ fun AtomApp() {
                         when (screen) {
                             AtomScreen.Today -> HomeScreen(
                                 reminders = reminders,
+                                ownerProfile = ownerProfile,
                                 darkTheme = darkTheme,
                                 selectedLogo = selectedLogo,
                                 onToggleTheme = { darkTheme = !darkTheme },
@@ -224,11 +366,15 @@ fun AtomApp() {
                                 reminder = editingReminder,
                                 onBack = { currentScreen = AtomScreen.Today },
                                 onSave = { draft ->
-                                    persistenceScope.launch {
-                                        reminderRepository.save(draft)
+                                    if (
+                                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                    ) {
+                                        pendingNotificationSave = draft
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        persistReminder(draft)
                                     }
-                                    editingReminder = null
-                                    currentScreen = AtomScreen.Reminders
                                 },
                             )
 
@@ -250,11 +396,17 @@ fun AtomApp() {
                             )
 
                             AtomScreen.Settings -> SettingsScreen(
+                                ownerProfile = ownerProfile,
                                 darkTheme = darkTheme,
                                 selectedLogo = selectedLogo,
                                 onToggleTheme = { darkTheme = !darkTheme },
                                 onChooseLogo = { showLogoGallery = true },
                                 onAlarmPreview = { showAlarmPreview = true },
+                                onSaveProfile = { name, gender, pronouns ->
+                                    persistenceScope.launch {
+                                        ownerProfileRepository.update(name, gender, pronouns)
+                                    }
+                                },
                             )
                         }
                     }
@@ -275,6 +427,113 @@ fun AtomApp() {
             if (showAlarmPreview) {
                 AlarmPreview(onDismiss = { showAlarmPreview = false })
             }
+
+            if (showInitialPermissionSetup) {
+                InitialPermissionSetupDialog(
+                    onContinue = {
+                        showInitialPermissionSetup = false
+                        permissionSetupStep = firstLaunchPermissionPlan.firstOrNull()
+                    },
+                    onNotNow = {
+                        permissionOnboardingPreferences.completed = true
+                        showInitialPermissionSetup = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun Context.pendingInitialPermissionSteps(): List<InitialPermissionStep> {
+    val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    val microphoneGranted =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val exactAlarmAccessGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    val fullScreenAlarmAccessGranted = hasFullScreenAlarmAccess()
+    return initialPermissionPlan(
+        notificationsGranted = notificationGranted,
+        microphoneGranted = microphoneGranted,
+        exactAlarmAccessGranted = exactAlarmAccessGranted,
+        fullScreenAlarmAccessGranted = fullScreenAlarmAccessGranted,
+    )
+}
+
+@Composable
+private fun InitialPermissionSetupDialog(
+    onContinue: () -> Unit,
+    onNotNow: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    AlertDialog(
+        onDismissRequest = onNotNow,
+        containerColor = colors.elevated,
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Text("Set up Atom", color = colors.ink, style = MaterialTheme.typography.titleLarge)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "Allow these once so Atom can listen and remind you reliably.",
+                    color = colors.muted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.NotificationsActive,
+                    title = "Notifications",
+                    detail = "Show reminders with sound and vibration",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.Mic,
+                    title = "Microphone",
+                    detail = "Listen only after you tap the mic",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.Alarm,
+                    title = "Alarms & reminders",
+                    detail = "Trigger reminders at the requested time",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.NotificationsActive,
+                    title = "Lock-screen Alarm Mode",
+                    detail = "Wake the display and show the ringing screen while locked",
+                )
+                Text(
+                    "No photo, file, or storage permission is needed. Room saves reminders inside Atom’s private app storage.",
+                    color = colors.muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onContinue) { Text("Continue") }
+        },
+        dismissButton = {
+            TextButton(onClick = onNotNow) { Text("Not now") }
+        },
+    )
+}
+
+@Composable
+private fun PermissionSetupRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    detail: String,
+) {
+    val colors = LocalAtomPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(colors.paper),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = colors.mintDark, modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(11.dp))
+        Column {
+            Text(title, color = colors.ink, style = MaterialTheme.typography.titleSmall)
+            Text(detail, color = colors.muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -300,6 +559,7 @@ private fun ScreenFrame(content: @Composable () -> Unit) {
 @Composable
 private fun HomeScreen(
     reminders: List<ReminderUi>,
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
@@ -319,6 +579,7 @@ private fun HomeScreen(
                 .padding(top = 10.dp, bottom = 30.dp),
         ) {
             AppHeader(
+                ownerProfile = ownerProfile,
                 darkTheme = darkTheme,
                 selectedLogo = selectedLogo,
                 onToggleTheme = onToggleTheme,
@@ -326,7 +587,10 @@ private fun HomeScreen(
                 onNotifications = onShowAlarm,
             )
             Spacer(Modifier.height(28.dp))
-            GreetingCard(scheduledCount = reminders.count { it.state == ReminderState.Scheduled })
+            GreetingCard(
+                ownerProfile = ownerProfile,
+                scheduledCount = reminders.count { it.state == ReminderState.Scheduled },
+            )
             Spacer(Modifier.height(18.dp))
             QuickCaptureCard(onCapture = onCapture)
             Spacer(Modifier.height(28.dp))
@@ -363,6 +627,7 @@ private fun HomeScreen(
 
 @Composable
 private fun AppHeader(
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
@@ -408,7 +673,7 @@ private fun AppHeader(
                 .background(colors.ink),
             contentAlignment = Alignment.Center,
         ) {
-            Text("D", color = colors.canvas, fontWeight = FontWeight.SemiBold)
+            Text(ownerProfile.initial, color = colors.canvas, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -432,8 +697,9 @@ private fun HeaderIcon(
 }
 
 @Composable
-private fun GreetingCard(scheduledCount: Int) {
+private fun GreetingCard(ownerProfile: OwnerProfile, scheduledCount: Int) {
     val colors = LocalAtomPalette.current
+    val locale = LocalConfiguration.current.locales[0]
     val now = remember { LocalDateTime.now() }
     Surface(
         color = colors.paper,
@@ -448,7 +714,7 @@ private fun GreetingCard(scheduledCount: Int) {
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    friendlyDate(now.toLocalDate()).uppercase(Locale.getDefault()),
+                    friendlyDate(now.toLocalDate()).uppercase(locale),
                     color = colors.muted,
                     style = MaterialTheme.typography.labelMedium,
                     letterSpacing = 1.1.sp,
@@ -457,7 +723,7 @@ private fun GreetingCard(scheduledCount: Int) {
                 Text(
                     buildAnnotatedString {
                         append("${greetingForHour(now.hour)},\n")
-                        withStyle(SpanStyle(color = colors.mintDark)) { append("$OwnerName.") }
+                        withStyle(SpanStyle(color = colors.mintDark)) { append("${ownerProfile.greetingName}.") }
                     },
                     color = colors.ink,
                     style = MaterialTheme.typography.headlineMedium,
@@ -783,6 +1049,61 @@ private fun CommandIntent.toActionLabel(): String = when (this) {
     CommandIntent.Repeat -> "Recurrence change"
 }
 
+private fun Context.openAtomAppSettings() {
+    startActivity(
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null),
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+    )
+}
+
+private fun Context.exactAlarmSettingsIntent(): Intent = Intent(
+        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        Uri.fromParts("package", packageName, null),
+    )
+
+private fun Context.hasFullScreenAlarmAccess(): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+        getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+private fun Context.fullScreenAlarmSettingsIntent(): Intent = Intent(
+    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+    Uri.fromParts("package", packageName, null),
+)
+
+private fun Context.openFullScreenAlarmSettings() {
+    if (hasFullScreenAlarmAccess()) return
+    runCatching { startActivity(fullScreenAlarmSettingsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .getOrElse { openAtomAppSettings() }
+}
+
+private fun Context.openNotificationRepairSettings() {
+    val alarmManager = getSystemService(AlarmManager::class.java)
+    val notificationManager = getSystemService(NotificationManager::class.java)
+    val intent = when {
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED ->
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms() ->
+            Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.fromParts("package", packageName, null))
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && !notificationManager.canUseFullScreenIntent() ->
+            Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.fromParts("package", packageName, null))
+        else -> Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+    }
+    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .getOrElse { openAtomAppSettings() }
+}
+
+private fun Context.openBatteryOptimizationSettings() {
+    runCatching {
+        startActivity(
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.getOrElse { openAtomAppSettings() }
+}
+
 @Composable
 private fun CaptureScreen(
     reminder: ReminderUi?,
@@ -790,17 +1111,72 @@ private fun CaptureScreen(
     onSave: (ReminderUi) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
+    val context = LocalContext.current
     val initialCommand = reminder?.let {
         it.sourceText.ifBlank {
             "Remind me to ${it.title}${it.date?.let { date -> " $date" }.orEmpty()}${it.time?.let { time -> " at $time" }.orEmpty()}"
         }
     } ?: ""
     var command by remember(reminder?.id) { mutableStateOf(initialCommand) }
-    var listening by remember { mutableStateOf(false) }
     val parser = remember { AtomCommandParser() }
     val reminderContext = remember(reminder) { reminder?.toParserContext() }
     var draft by remember { mutableStateOf<ParsedCommand?>(null) }
     var showFollowUp by remember { mutableStateOf(false) }
+    var speechState by remember { mutableStateOf<SpeechCaptureState>(SpeechCaptureState.Idle) }
+    var permissionDenied by remember { mutableStateOf(false) }
+    var voiceSessionOriginal by remember { mutableStateOf(initialCommand) }
+    var voiceFinalized by remember { mutableStateOf(false) }
+    var lastInputWasVoice by remember { mutableStateOf(false) }
+    val speechRecognizer = remember(context, reminder?.id) {
+        AtomSpeechRecognizer(
+            context = context,
+            onPartialResult = { target, transcript ->
+                if (target == SpeechInputTarget.Command) {
+                    command = transcript
+                    draft = null
+                }
+            },
+            onFinalResult = { target, transcript ->
+                if (target == SpeechInputTarget.Command) {
+                    voiceFinalized = true
+                    lastInputWasVoice = true
+                    command = transcript
+                    draft = null
+                }
+            },
+            onStateChanged = { state ->
+                speechState = state
+                if (state is SpeechCaptureState.Error && !voiceFinalized) {
+                    command = voiceSessionOriginal
+                }
+            },
+        )
+    }
+    DisposableEffect(speechRecognizer) {
+        onDispose { speechRecognizer.destroy() }
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionDenied = !granted
+        if (granted) speechRecognizer.start(SpeechInputTarget.Command)
+    }
+    val speechActive = speechState is SpeechCaptureState.Listening || speechState is SpeechCaptureState.Processing
+
+    fun beginCommandSpeech() {
+        voiceSessionOriginal = command
+        voiceFinalized = false
+        permissionDenied = false
+        when {
+            !speechRecognizer.capability.available -> {
+                speechState = SpeechCaptureState.Unavailable(speechRecognizer.capability.description)
+            }
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> {
+                speechRecognizer.start(SpeechInputTarget.Command)
+            }
+            else -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
 
     fun saveDraft(value: ParsedCommand) {
         val missingDate = MissingField.Date in value.missingFields
@@ -822,7 +1198,7 @@ private fun CaptureScreen(
                 title = value.task ?: reminder?.title ?: "Untitled reminder",
                 date = value.recurrenceLabel ?: value.relativeLabel ?: value.localDate?.toAtomDateLabel(),
                 time = value.localTime?.toAtomTimeLabel(),
-                source = if (listening) "Voice" else "Text",
+                source = if (lastInputWasVoice) "Voice" else "Text",
                 state = state,
                 accent = reminder?.accent ?: ReminderAccent.Mint,
                 recurrence = value.recurrenceLabel,
@@ -861,7 +1237,12 @@ private fun CaptureScreen(
                 }
                 Spacer(Modifier.weight(1f))
                 if (command.isNotBlank()) {
-                    IconButton(onClick = { command = ""; draft = null }) {
+                    IconButton(onClick = {
+                        speechRecognizer.cancel()
+                        command = ""
+                        draft = null
+                        lastInputWasVoice = false
+                    }) {
                         Icon(Icons.Rounded.Close, "Clear", tint = colors.muted)
                     }
                 }
@@ -880,14 +1261,38 @@ private fun CaptureScreen(
             )
             Spacer(Modifier.height(26.dp))
             VoiceOrb(
-                listening = listening,
+                listening = speechActive,
                 onClick = {
-                    listening = !listening
-                    if (command.isBlank()) {
-                        command = "Hey Atom, remind me to send the product brief tomorrow at 6:30 PM"
-                    }
+                    if (speechActive) speechRecognizer.stop() else beginCommandSpeech()
                 },
             )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                when (val state = speechState) {
+                    is SpeechCaptureState.Listening -> "Listening on your device…"
+                    is SpeechCaptureState.Processing -> "Finishing transcription…"
+                    is SpeechCaptureState.Error -> state.message
+                    is SpeechCaptureState.Unavailable -> state.message
+                    SpeechCaptureState.Idle -> speechRecognizer.capability.description
+                },
+                color = when (speechState) {
+                    is SpeechCaptureState.Error,
+                    is SpeechCaptureState.Unavailable,
+                    -> colors.coral
+                    else -> colors.muted
+                },
+                style = MaterialTheme.typography.bodySmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (permissionDenied) {
+                TextButton(
+                    onClick = { context.openAtomAppSettings() },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text("Allow microphone in Settings", color = colors.coral)
+                }
+            }
             Spacer(Modifier.height(24.dp))
             Surface(
                 color = colors.surface,
@@ -900,12 +1305,16 @@ private fun CaptureScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("YOUR WORDS", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.1.sp)
                         Spacer(Modifier.weight(1f))
-                        Text(if (listening) "Listening…" else "Editable", color = if (listening) colors.coral else colors.mintDark, style = MaterialTheme.typography.labelMedium)
+                        Text(if (speechActive) "Listening…" else "Editable", color = if (speechActive) colors.coral else colors.mintDark, style = MaterialTheme.typography.labelMedium)
                     }
                     Spacer(Modifier.height(12.dp))
                     BasicTextField(
                         value = command,
-                        onValueChange = { command = it; draft = null },
+                        onValueChange = {
+                            command = it
+                            draft = null
+                            lastInputWasVoice = false
+                        },
                         minLines = 3,
                         maxLines = 6,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(color = colors.ink),
@@ -933,6 +1342,7 @@ private fun CaptureScreen(
                             else -> "Hey Atom, remind me to submit the report tomorrow at 12:00 AM"
                         }
                         draft = null
+                        lastInputWasVoice = false
                     }
                 }
             }
@@ -941,10 +1351,10 @@ private fun CaptureScreen(
                 onClick = {
                     if (command.isNotBlank()) {
                         draft = parser.parse(command, reminderContext)
-                        listening = false
+                        if (speechActive) speechRecognizer.stop()
                     }
                 },
-                enabled = command.isNotBlank(),
+                enabled = command.isNotBlank() && !speechActive,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(18.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = colors.ink, contentColor = colors.canvas),
@@ -976,6 +1386,7 @@ private fun CaptureScreen(
             onResolve = { details ->
                 parser.parse("${draft!!.sourceText} $details", reminderContext)
             },
+            onVoiceInput = { lastInputWasVoice = true },
             onSave = { resolved ->
                 showFollowUp = false
                 draft = resolved
@@ -1146,14 +1557,86 @@ private fun MissingDetailsDialog(
     draft: ParsedCommand,
     onDismiss: () -> Unit,
     onResolve: (String) -> ParsedCommand,
+    onVoiceInput: () -> Unit,
     onSave: (ParsedCommand) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
+    val context = LocalContext.current
     val missingDate = MissingField.Date in draft.missingFields
     val missingTime = MissingField.Time in draft.missingFields || MissingField.AmPm in draft.missingFields
     var date by remember { mutableStateOf("") }
     var time by remember { mutableStateOf("") }
     var validationMessage by remember { mutableStateOf<String?>(null) }
+    var speechState by remember { mutableStateOf<SpeechCaptureState>(SpeechCaptureState.Idle) }
+    var activeSpeechTarget by remember { mutableStateOf<SpeechInputTarget?>(null) }
+    var previousSpokenFieldValue by remember { mutableStateOf("") }
+    var followUpFinalized by remember { mutableStateOf(false) }
+    var permissionDenied by remember { mutableStateOf(false) }
+    val speechRecognizer = remember(context) {
+        AtomSpeechRecognizer(
+            context = context,
+            onPartialResult = { target, transcript ->
+                when (target) {
+                    SpeechInputTarget.MissingDate -> date = transcript
+                    SpeechInputTarget.MissingTime -> time = transcript
+                    SpeechInputTarget.Command -> Unit
+                }
+                validationMessage = null
+            },
+            onFinalResult = { target, transcript ->
+                followUpFinalized = true
+                onVoiceInput()
+                when (target) {
+                    SpeechInputTarget.MissingDate -> date = transcript
+                    SpeechInputTarget.MissingTime -> time = transcript
+                    SpeechInputTarget.Command -> Unit
+                }
+                activeSpeechTarget = null
+                validationMessage = null
+            },
+            onStateChanged = { state ->
+                speechState = state
+                if (state is SpeechCaptureState.Error && !followUpFinalized) {
+                    when (activeSpeechTarget) {
+                        SpeechInputTarget.MissingDate -> date = previousSpokenFieldValue
+                        SpeechInputTarget.MissingTime -> time = previousSpokenFieldValue
+                        else -> Unit
+                    }
+                }
+            },
+        )
+    }
+    DisposableEffect(speechRecognizer) {
+        onDispose { speechRecognizer.destroy() }
+    }
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        permissionDenied = !granted
+        if (granted) activeSpeechTarget?.let { speechRecognizer.start(it) }
+    }
+    val speechActive = speechState is SpeechCaptureState.Listening || speechState is SpeechCaptureState.Processing
+
+    fun beginFollowUpSpeech(target: SpeechInputTarget) {
+        activeSpeechTarget = target
+        previousSpokenFieldValue = when (target) {
+            SpeechInputTarget.MissingDate -> date
+            SpeechInputTarget.MissingTime -> time
+            SpeechInputTarget.Command -> ""
+        }
+        followUpFinalized = false
+        permissionDenied = false
+        when {
+            !speechRecognizer.capability.available -> {
+                speechState = SpeechCaptureState.Unavailable(speechRecognizer.capability.description)
+            }
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED -> {
+                speechRecognizer.start(target)
+            }
+            else -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = colors.elevated,
@@ -1170,11 +1653,27 @@ private fun MissingDetailsDialog(
                 if (missingDate) {
                     OutlinedTextField(
                         value = date,
-                        onValueChange = { date = it },
+                        onValueChange = { date = it; validationMessage = null },
                         label = { Text("Date") },
                         placeholder = { Text("Today, tomorrow, or a date") },
                         leadingIcon = { Icon(Icons.Rounded.CalendarToday, null) },
-                        trailingIcon = { Icon(Icons.Rounded.Mic, "Speak the date") },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) {
+                                        speechRecognizer.stop()
+                                    } else {
+                                        beginFollowUpSpeech(SpeechInputTarget.MissingDate)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) Icons.Rounded.Check else Icons.Rounded.Mic,
+                                    "Speak the date",
+                                    tint = if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingDate) colors.coral else colors.muted,
+                                )
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                     )
@@ -1182,14 +1681,42 @@ private fun MissingDetailsDialog(
                 if (missingTime) {
                     OutlinedTextField(
                         value = time,
-                        onValueChange = { time = it },
+                        onValueChange = { time = it; validationMessage = null },
                         label = { Text("Time · 12-hour format") },
                         placeholder = { Text("6:30 PM") },
                         leadingIcon = { Icon(Icons.Rounded.Schedule, null) },
-                        trailingIcon = { Icon(Icons.Rounded.Mic, "Speak the time") },
+                        trailingIcon = {
+                            IconButton(
+                                onClick = {
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) {
+                                        speechRecognizer.stop()
+                                    } else {
+                                        beginFollowUpSpeech(SpeechInputTarget.MissingTime)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) Icons.Rounded.Check else Icons.Rounded.Mic,
+                                    "Speak the time",
+                                    tint = if (speechActive && activeSpeechTarget == SpeechInputTarget.MissingTime) colors.coral else colors.muted,
+                                )
+                            }
+                        },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
                     )
+                }
+                when (val state = speechState) {
+                    is SpeechCaptureState.Listening -> Text("Listening…", color = colors.mintDark, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Processing -> Text("Finishing transcription…", color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Error -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.Unavailable -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
+                    SpeechCaptureState.Idle -> Unit
+                }
+                if (permissionDenied) {
+                    TextButton(onClick = { context.openAtomAppSettings() }) {
+                        Text("Allow microphone in Settings", color = colors.coral)
+                    }
                 }
                 validationMessage?.let {
                     Text(it, color = colors.coral, style = MaterialTheme.typography.bodySmall)
@@ -1238,6 +1765,7 @@ private fun RemindersScreen(
             "Scheduled" -> it.state == ReminderState.Scheduled
             "Needs details" -> it.state in setOf(ReminderState.NeedsDate, ReminderState.NeedsTime, ReminderState.Unscheduled)
             "Repeats" -> it.recurrence != null
+            "Missed" -> it.state == ReminderState.Missed
             "Completed" -> it.state == ReminderState.Completed
             else -> true
         }
@@ -1262,7 +1790,7 @@ private fun RemindersScreen(
                     modifier = Modifier.horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf("All", "Scheduled", "Needs details", "Repeats", "Completed").forEach { option ->
+                    listOf("All", "Scheduled", "Needs details", "Missed", "Repeats", "Completed").forEach { option ->
                         FilterChip(option, option == filter) { filter = option }
                     }
                 }
@@ -1347,6 +1875,17 @@ private fun ReminderCard(reminder: ReminderUi, onEdit: () -> Unit, onDelete: () 
                         Spacer(Modifier.width(4.dp))
                         Text(it, color = colors.mintDark, style = MaterialTheme.typography.labelMedium)
                     }
+                    if (reminder.state == ReminderState.Missed) {
+                        Spacer(Modifier.width(7.dp))
+                        Surface(color = colors.coralPale, shape = RoundedCornerShape(50)) {
+                            Text(
+                                "Missed",
+                                color = colors.coral,
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1373,18 +1912,54 @@ private fun EmptyReminders(onAdd: () -> Unit) {
 
 @Composable
 private fun SettingsScreen(
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
     onChooseLogo: () -> Unit,
     onAlarmPreview: () -> Unit,
+    onSaveProfile: (String, GenderOption, PronounOption) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
-    var alarmMode by rememberSaveable { mutableStateOf(true) }
+    val context = LocalContext.current
+    val alarmPreferences = remember(context) { AlarmPreferences(context) }
+    val reliabilityManager = remember(context) {
+        (context.applicationContext as AtomApplication).deviceReliabilityManager
+    }
+    val reliabilityMonitor = reliabilityManager.monitor
+    val reliabilityScope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var reliabilityRefresh by remember { mutableStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                reliabilityScope.launch {
+                    reliabilityManager.reconcile(AlarmReconciliationReason.AppStart)
+                    reliabilityRefresh += 1
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    var alarmMode by rememberSaveable { mutableStateOf(alarmPreferences.alarmModeEnabled) }
     var aiFallback by rememberSaveable { mutableStateOf(false) }
     var showPrefixes by rememberSaveable { mutableStateOf(false) }
+    var showProfileEditor by rememberSaveable { mutableStateOf(false) }
     val locale = remember { Locale.getDefault().displayName }
     val timezone = remember { ZoneId.systemDefault().id }
+    val reliability = remember(reliabilityRefresh) { reliabilityMonitor.snapshot() }
+    val missingAlarmRequirements = reliability.missingAlarmRequirements(alarmMode)
+    val notificationHealthy = missingAlarmRequirements.isEmpty()
+    val notificationHealthText = missingAlarmRequirements.let { missing ->
+        if (missing.isEmpty()) "Sound, vibration, and alarm access ready" else "Needs ${missing.joinToString()}"
+    }
+    val reconciliationText = reliability.lastSuccessfulReconciliation?.let { instant ->
+        val checkedAt = instant.atZone(ZoneId.systemDefault()).format(
+            DateTimeFormatter.ofPattern("MMM d, h:mm a", Locale.getDefault()),
+        )
+        "Last checked $checkedAt · ${reliability.lastReconciliationReason?.displayLabel ?: "device event"}"
+    } ?: "Runs after launch, reboot, updates, and clock changes"
 
     ScreenFrame {
         Column(
@@ -1397,27 +1972,42 @@ private fun SettingsScreen(
             Text("SETTINGS", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.2.sp)
             Text("Make Atom yours", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(22.dp))
-            Surface(color = colors.ink, shape = RoundedCornerShape(26.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                color = colors.ink,
+                shape = RoundedCornerShape(26.dp),
+                modifier = Modifier.fillMaxWidth().clickable { showProfileEditor = true },
+            ) {
                 Row(modifier = Modifier.padding(19.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier.size(52.dp).clip(CircleShape).background(colors.mint),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("D", color = Color(0xFF092117), style = MaterialTheme.typography.titleLarge)
+                        Text(ownerProfile.initial, color = Color(0xFF092117), style = MaterialTheme.typography.titleLarge)
                     }
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text(OwnerName, color = colors.quickCardText, style = MaterialTheme.typography.titleMedium)
-                        Text("Atom’s sole owner", color = colors.quickCardText.copy(alpha = .58f), style = MaterialTheme.typography.bodyMedium)
+                        Text(ownerProfile.greetingName, color = colors.quickCardText, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${ownerProfile.pronouns.label} · Atom’s sole owner",
+                            color = colors.quickCardText.copy(alpha = .58f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Spacer(Modifier.weight(1f))
-                    Icon(Icons.Rounded.Lock, null, tint = colors.mint, modifier = Modifier.size(19.dp))
+                    Icon(Icons.Rounded.Edit, "Edit profile", tint = colors.mint, modifier = Modifier.size(19.dp))
                 }
             }
             Spacer(Modifier.height(25.dp))
             SettingsLabel("PERSONALIZATION")
             Spacer(Modifier.height(9.dp))
             SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Person,
+                    title = "Profile",
+                    subtitle = "${ownerProfile.displayName} · ${ownerProfile.gender.label} · ${ownerProfile.pronouns.label}",
+                    onClick = { showProfileEditor = true },
+                )
+                SettingsDivider()
                 SettingsRow(
                     icon = if (darkTheme) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
                     title = "Appearance",
@@ -1455,7 +2045,13 @@ private fun SettingsScreen(
                     trailing = {
                         Switch(
                             checked = alarmMode,
-                            onCheckedChange = { alarmMode = it },
+                            onCheckedChange = {
+                                alarmMode = it
+                                alarmPreferences.alarmModeEnabled = it
+                                if (it && !context.hasFullScreenAlarmAccess()) {
+                                    context.openFullScreenAlarmSettings()
+                                }
+                            },
                             colors = atomSwitchColors(),
                         )
                     },
@@ -1471,8 +2067,30 @@ private fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Rounded.NotificationsActive,
                     title = "Notification health",
-                    subtitle = "Permissions checked on this device",
-                    badge = "Ready",
+                    subtitle = notificationHealthText,
+                    badge = if (notificationHealthy) "Ready" else "Repair",
+                    onClick = { if (!notificationHealthy) context.openNotificationRepairSettings() },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.NotificationsNone,
+                    title = "Battery troubleshooting",
+                    subtitle = if (reliability.batteryOptimizationExempt) {
+                        "Unrestricted battery access is already enabled"
+                    } else {
+                        "Optional only · not required for normal alarm delivery"
+                    },
+                    badge = "Optional",
+                    onClick = {
+                        if (!reliability.batteryOptimizationExempt) context.openBatteryOptimizationSettings()
+                    },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    icon = Icons.Rounded.Schedule,
+                    title = "Alarm restoration",
+                    subtitle = reconciliationText,
+                    badge = "Active",
                 )
             }
             Spacer(Modifier.height(22.dp))
@@ -1504,7 +2122,7 @@ private fun SettingsScreen(
                 Icon(Icons.Rounded.CloudOff, null, tint = colors.muted, modifier = Modifier.size(17.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Offline device storage is active. Alarms, speech recognition, and optional cloud sync are wired in the implementation phases that follow.",
+                    "Offline storage, speech recognition, and local alarm delivery stay on this device. Railway sync remains optional.",
                     color = colors.muted,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -1516,6 +2134,168 @@ private fun SettingsScreen(
 
     if (showPrefixes) {
         PrefixesDialog(onDismiss = { showPrefixes = false })
+    }
+    if (showProfileEditor) {
+        ProfileEditorSheet(
+            profile = ownerProfile,
+            onDismiss = { showProfileEditor = false },
+            onSave = { name, gender, pronouns ->
+                onSaveProfile(name, gender, pronouns)
+                showProfileEditor = false
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileEditorSheet(
+    profile: OwnerProfile,
+    onDismiss: () -> Unit,
+    onSave: (String, GenderOption, PronounOption) -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var name by remember(profile.displayName) { mutableStateOf(profile.displayName) }
+    var gender by remember(profile.gender) { mutableStateOf(profile.gender) }
+    var pronouns by remember(profile.pronouns) { mutableStateOf(profile.pronouns) }
+    val normalizedName = name.trim().replace(Regex("\\s+"), " ")
+    val preview = profile.copy(
+        displayName = normalizedName.ifEmpty { "Your name" },
+        gender = gender,
+        pronouns = pronouns,
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = colors.elevated,
+        contentColor = colors.ink,
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(top = 11.dp, bottom = 7.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(colors.line),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+        ) {
+            Text("Your profile", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(5.dp))
+            Text(
+                "Atom keeps these details only on this phone and uses them to personalize your greeting.",
+                color = colors.muted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(20.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(40) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Name") },
+                placeholder = { Text("What should Atom call you?") },
+                leadingIcon = { Icon(Icons.Rounded.Person, null) },
+                shape = RoundedCornerShape(17.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            ProfileFieldLabel("Gender")
+            Spacer(Modifier.height(9.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GenderOption.entries.forEach { option ->
+                    ProfileChoiceChip(
+                        label = option.label,
+                        selected = option == gender,
+                        onClick = { gender = option },
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            ProfileFieldLabel("Pronouns")
+            Spacer(Modifier.height(9.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PronounOption.entries.forEach { option ->
+                    ProfileChoiceChip(
+                        label = option.label,
+                        selected = option == pronouns,
+                        onClick = { pronouns = option },
+                    )
+                }
+            }
+            Spacer(Modifier.height(22.dp))
+            Surface(color = colors.paper, shape = RoundedCornerShape(19.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("GREETING PREVIEW", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${greetingForHour(LocalDateTime.now().hour)}, ${preview.greetingName}.",
+                        color = colors.ink,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = { onSave(normalizedName, gender, pronouns) },
+                enabled = normalizedName.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(17.dp),
+            ) {
+                Text("Save profile")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileFieldLabel(text: String) {
+    Text(
+        text,
+        color = LocalAtomPalette.current.ink,
+        style = MaterialTheme.typography.titleMedium,
+    )
+}
+
+@Composable
+private fun ProfileChoiceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    Surface(
+        color = if (selected) colors.mintPale else colors.surface,
+        contentColor = if (selected) colors.mintDark else colors.ink,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier
+            .border(1.dp, if (selected) colors.mint else colors.line, RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selected) {
+                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 
@@ -1692,7 +2472,7 @@ private fun AtomWordmark(variant: LogoVariant, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
+internal fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
     val colors = LocalAtomPalette.current
     val darkBack = variant !in listOf(LogoVariant.Pulse, LogoVariant.Halo, LogoVariant.Mono, LogoVariant.Arc)
     val shape = when (variant) {
@@ -1819,69 +2599,17 @@ private fun AtomGlyph(variant: LogoVariant, modifier: Modifier = Modifier) {
 
 @Composable
 private fun AlarmPreview(onDismiss: () -> Unit) {
-    val colors = LocalAtomPalette.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = colors.quickCard) {
-            Box(modifier = Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd).padding(14.dp)) {
-                    Icon(Icons.Rounded.Close, "Close preview", tint = colors.quickCardText.copy(alpha = .7f))
-                }
-                Column(
-                    modifier = Modifier.align(Alignment.Center).padding(horizontal = 30.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    AtomGlyph(LogoVariant.Original, Modifier.size(56.dp))
-                    Spacer(Modifier.height(30.dp))
-                    Text("12:00", color = colors.quickCardText, fontSize = 68.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-3).sp)
-                    Text("PM · REMINDER", color = colors.mint, style = MaterialTheme.typography.labelLarge, letterSpacing = 1.5.sp)
-                    Spacer(Modifier.height(25.dp))
-                    Text(
-                        "Send product brief to Aisha",
-                        color = colors.quickCardText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text("Atom is ringing until you choose.", color = colors.quickCardText.copy(alpha = .55f), style = MaterialTheme.typography.bodyMedium)
-                    Spacer(Modifier.height(42.dp))
-                    Button(
-                        onClick = onDismiss,
-                        modifier = Modifier.fillMaxWidth().height(58.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = colors.mint, contentColor = Color(0xFF082017)),
-                    ) {
-                        Icon(Icons.Rounded.Check, null)
-                        Spacer(Modifier.width(9.dp))
-                        Text("Done")
-                    }
-                    Spacer(Modifier.height(11.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(54.dp),
-                            shape = RoundedCornerShape(17.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.quickCardText),
-                        ) {
-                            Icon(Icons.Rounded.Snooze, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("Snooze")
-                        }
-                        OutlinedButton(
-                            onClick = onDismiss,
-                            modifier = Modifier.weight(1f).height(54.dp),
-                            shape = RoundedCornerShape(17.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.quickCardText),
-                        ) {
-                            Icon(Icons.Rounded.Refresh, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(7.dp))
-                            Text("Remind again")
-                        }
-                    }
-                }
-            }
-        }
+        AtomAlarmScreen(
+            title = "Send product brief to Aisha",
+            busy = false,
+            onDone = onDismiss,
+            onSnooze = onDismiss,
+            onRemindAgain = onDismiss,
+            onClose = onDismiss,
+        )
     }
 }

@@ -49,3 +49,11 @@ next-env.d.ts
 /android/captures/
 *.jks
 *.keystore
+
+# iOS
+/atom-ios/.build/
+/atom-ios/.swiftpm/
+/atom-ios/atom-ios.xcodeproj/project.xcworkspace/xcuserdata/
+/atom-ios/atom-ios.xcodeproj/xcuserdata/
+xcuserdata/
+DerivedData/

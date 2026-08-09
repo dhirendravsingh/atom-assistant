@@ -10,6 +10,10 @@ data class OwnerProfileEntity(
     val id: Int = 1,
     @ColumnInfo(name = "display_name")
     val displayName: String,
+    @ColumnInfo(defaultValue = "'Man'")
+    val gender: String = "Man",
+    @ColumnInfo(defaultValue = "'HeHim'")
+    val pronouns: String = "HeHim",
     val timezone: String,
     val locale: String,
     @ColumnInfo(name = "created_at_utc")

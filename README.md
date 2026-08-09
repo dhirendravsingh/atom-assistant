@@ -1,17 +1,18 @@
 # Atom
 
-Atom is a personal, Android-first reminder assistant for Dhiren. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
+Atom is a personal, offline-first reminder assistant for Dhiren. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
 
 This repository currently contains two complementary surfaces:
 
 - `android/` — the real Kotlin + Jetpack Compose Android application UI.
+- `atom-ios/` — the separate native SwiftUI iPhone and iPad application.
 - `app/` — the approved interactive web prototype used to iterate on the visual direction.
 
 ## Current status
 
-The Android Phase 1 UI is implemented: light/dark themes, time-aware greeting, animated quick capture, 14 Atom marks, capture/review/follow-up flows, reminder editing, recurring reminder presentation, settings, and a full-screen Alarm Mode preview.
+The Android Phase 1 experience is implemented: light/dark themes, time-aware greeting, animated quick capture, 14 Atom marks, capture/review/follow-up flows, reminder editing, recurrence, settings, and full-screen Alarm Mode.
 
-Durable offline Room storage is connected: reminders now survive application restarts and the single owner profile is initialized automatically on first use. Android alarm scheduling, on-device speech recognition, notification channels, reboot recovery, Railway sync, and the optional OpenAI fallback are not connected yet. The UI labels these boundaries instead of pretending they are live.
+Durable Room storage, deterministic parsing, Android speech recognition, local alarm scheduling, notification actions, and device lifecycle recovery are connected. Phase 1 is intentionally local-only: no Railway service, PostgreSQL database, account, or synchronization queue is required. Optional Railway backup and synchronization are deferred to Phase 2, and the optional OpenAI fallback is not connected.
 
 ## Run the Android app
 
@@ -27,10 +28,27 @@ cd android
 The debug APK is written to:
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/debug/atom-android-debug.apk
 ```
 
-GitHub Actions runs the same tests and debug build whenever Android files change.
+The signed release artifact is named `atom-android-release.apk`.
+
+## Run the iOS app
+
+The iOS application requires the full Xcode application and iOS SDK. After
+installing Xcode and XcodeGen 2.46 or newer:
+
+```bash
+cd atom-ios
+xcodegen generate
+open atom-ios.xcodeproj
+```
+
+The iOS target and installed app are named `atom-ios`. Its platform-neutral
+parser and permission checks can also be run with `swift run AtomCoreChecks`; see
+`atom-ios/README.md` for current platform limitations.
+
+Separate GitHub Actions workflows validate Android and iOS changes.
 
 ## Run the web prototype
 
@@ -51,8 +69,9 @@ Then open `http://localhost:3000`.
 - `docs/PRIVACY.md`
 - `docs/FAILURE_SCENARIOS.md`
 - `docs/LOCAL_DATABASE.md`
+- `docs/ROADMAP.md`
 - `docs/changelog/` — one changelog fragment per pull request
 
 ## Repository safety
 
-Signing keys, local Android SDK paths, environment files, and generated build output are excluded from Git. Keep the eventual release keystore and Railway/OpenAI credentials outside the repository.
+Signing keys, local Android SDK paths, environment files, and generated build output are excluded from Git. Keep the release keystore and any future Phase 2 Railway/OpenAI credentials outside the repository.

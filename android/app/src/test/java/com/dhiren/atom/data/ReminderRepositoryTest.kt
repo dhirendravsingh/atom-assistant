@@ -32,6 +32,47 @@ class ReminderRepositoryTest {
     }
 
     @Test
+    fun `noon is persisted as twelve pm rather than midnight`() {
+        val entity = reminder(
+            date = "Tomorrow",
+            time = "12:00 PM",
+        ).toEntity(clock = clock, zone = timezone)
+
+        assertEquals("12:00", entity.localTime)
+        assertEquals("2026-08-02T06:30:00Z", entity.scheduledAtUtc)
+    }
+
+    @Test
+    fun `spring daylight saving gap resolves to the next valid instant`() {
+        val newYork = ZoneId.of("America/New_York")
+        val entity = reminder(
+            date = null,
+            time = null,
+        ).copy(
+            localDate = "2026-03-08",
+            localTime = "02:30",
+            timezone = newYork.id,
+        ).toEntity(clock = clock, zone = newYork)
+
+        assertEquals("2026-03-08T07:30:00Z", entity.scheduledAtUtc)
+    }
+
+    @Test
+    fun `autumn daylight saving overlap chooses the earlier occurrence`() {
+        val newYork = ZoneId.of("America/New_York")
+        val entity = reminder(
+            date = null,
+            time = null,
+        ).copy(
+            localDate = "2026-11-01",
+            localTime = "01:30",
+            timezone = newYork.id,
+        ).toEntity(clock = clock, zone = newYork)
+
+        assertEquals("2026-11-01T05:30:00Z", entity.scheduledAtUtc)
+    }
+
+    @Test
     fun `relative schedule is resolved when owner confirms`() {
         val entity = reminder(
             date = "In 20 minutes",
