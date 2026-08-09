@@ -6,16 +6,19 @@ enum class InitialPermissionStep {
     Notifications,
     Microphone,
     ExactAlarms,
+    FullScreenAlarms,
 }
 
 fun initialPermissionPlan(
     notificationsGranted: Boolean,
     microphoneGranted: Boolean,
     exactAlarmAccessGranted: Boolean,
+    fullScreenAlarmAccessGranted: Boolean,
 ): List<InitialPermissionStep> = listOfNotNull(
     InitialPermissionStep.Notifications.takeUnless { notificationsGranted },
     InitialPermissionStep.Microphone.takeUnless { microphoneGranted },
     InitialPermissionStep.ExactAlarms.takeUnless { exactAlarmAccessGranted },
+    InitialPermissionStep.FullScreenAlarms.takeUnless { fullScreenAlarmAccessGranted },
 )
 
 class InitialPermissionOnboardingPreferences(context: Context) {
@@ -25,12 +28,15 @@ class InitialPermissionOnboardingPreferences(context: Context) {
     )
 
     var completed: Boolean
-        get() = preferences.getBoolean(CompletedKey, false)
+        get() = preferences.getInt(CompletedVersionKey, 0) >= CurrentVersion
         set(value) {
-            preferences.edit().putBoolean(CompletedKey, value).apply()
+            preferences.edit().putInt(CompletedVersionKey, if (value) CurrentVersion else 0).apply()
         }
 
     private companion object {
-        const val CompletedKey = "initial_permission_setup_completed"
+        // Version 2 adds Android 14+ full-screen alarm access. Existing installs
+        // receive this setup once after updating, without being prompted forever.
+        const val CurrentVersion = 2
+        const val CompletedVersionKey = "initial_permission_setup_completed_version"
     }
 }

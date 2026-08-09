@@ -12,11 +12,13 @@ class InitialPermissionOnboardingTest {
                 InitialPermissionStep.Notifications,
                 InitialPermissionStep.Microphone,
                 InitialPermissionStep.ExactAlarms,
+                InitialPermissionStep.FullScreenAlarms,
             ),
             initialPermissionPlan(
                 notificationsGranted = false,
                 microphoneGranted = false,
                 exactAlarmAccessGranted = false,
+                fullScreenAlarmAccessGranted = false,
             ),
         )
     }
@@ -29,6 +31,7 @@ class InitialPermissionOnboardingTest {
                 notificationsGranted = true,
                 microphoneGranted = true,
                 exactAlarmAccessGranted = false,
+                fullScreenAlarmAccessGranted = true,
             ),
         )
         assertTrue(
@@ -36,7 +39,21 @@ class InitialPermissionOnboardingTest {
                 notificationsGranted = true,
                 microphoneGranted = true,
                 exactAlarmAccessGranted = true,
+                fullScreenAlarmAccessGranted = true,
             ).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `full-screen alarm access remains required when other access is ready`() {
+        assertEquals(
+            listOf(InitialPermissionStep.FullScreenAlarms),
+            initialPermissionPlan(
+                notificationsGranted = true,
+                microphoneGranted = true,
+                exactAlarmAccessGranted = true,
+                fullScreenAlarmAccessGranted = false,
+            ),
         )
     }
 }

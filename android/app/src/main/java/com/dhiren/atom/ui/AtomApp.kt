@@ -228,6 +228,17 @@ fun AtomApp() {
     ) {
         permissionSetupStep = InitialPermissionStep.ExactAlarms
     }
+    val initialExactAlarmAccessLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+    }
+    val initialFullScreenAlarmAccessLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+    ) {
+        permissionOnboardingPreferences.completed = true
+        permissionSetupStep = null
+    }
 
     LaunchedEffect(firstLaunchPermissionPlan) {
         if (firstLaunchPermissionPlan.isEmpty()) {
@@ -258,13 +269,33 @@ fun AtomApp() {
             }
 
             InitialPermissionStep.ExactAlarms -> {
-                permissionOnboardingPreferences.completed = true
-                permissionSetupStep = null
                 if (
                     Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
                     !context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
                 ) {
-                    context.openExactAlarmSettings()
+                    runCatching {
+                        initialExactAlarmAccessLauncher.launch(context.exactAlarmSettingsIntent())
+                    }.onFailure {
+                        context.openAtomAppSettings()
+                        permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+                    }
+                } else {
+                    permissionSetupStep = InitialPermissionStep.FullScreenAlarms
+                }
+            }
+
+            InitialPermissionStep.FullScreenAlarms -> {
+                if (!context.hasFullScreenAlarmAccess()) {
+                    runCatching {
+                        initialFullScreenAlarmAccessLauncher.launch(context.fullScreenAlarmSettingsIntent())
+                    }.onFailure {
+                        context.openAtomAppSettings()
+                        permissionOnboardingPreferences.completed = true
+                        permissionSetupStep = null
+                    }
+                } else {
+                    permissionOnboardingPreferences.completed = true
+                    permissionSetupStep = null
                 }
             }
 
@@ -420,10 +451,12 @@ private fun Context.pendingInitialPermissionSteps(): List<InitialPermissionStep>
         ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     val exactAlarmAccessGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
         getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    val fullScreenAlarmAccessGranted = hasFullScreenAlarmAccess()
     return initialPermissionPlan(
         notificationsGranted = notificationGranted,
         microphoneGranted = microphoneGranted,
         exactAlarmAccessGranted = exactAlarmAccessGranted,
+        fullScreenAlarmAccessGranted = fullScreenAlarmAccessGranted,
     )
 }
 
@@ -461,6 +494,11 @@ private fun InitialPermissionSetupDialog(
                     icon = Icons.Rounded.Alarm,
                     title = "Alarms & reminders",
                     detail = "Trigger reminders at the requested time",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.NotificationsActive,
+                    title = "Lock-screen Alarm Mode",
+                    detail = "Wake the display and show the ringing screen while locked",
                 )
                 Text(
                     "No photo, file, or storage permission is needed. Room saves reminders inside Atom’s private app storage.",
@@ -1020,12 +1058,23 @@ private fun Context.openAtomAppSettings() {
     )
 }
 
-private fun Context.openExactAlarmSettings() {
-    val intent = Intent(
+private fun Context.exactAlarmSettingsIntent(): Intent = Intent(
         Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
         Uri.fromParts("package", packageName, null),
     )
-    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+
+private fun Context.hasFullScreenAlarmAccess(): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+        getSystemService(NotificationManager::class.java).canUseFullScreenIntent()
+
+private fun Context.fullScreenAlarmSettingsIntent(): Intent = Intent(
+    Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+    Uri.fromParts("package", packageName, null),
+)
+
+private fun Context.openFullScreenAlarmSettings() {
+    if (hasFullScreenAlarmAccess()) return
+    runCatching { startActivity(fullScreenAlarmSettingsIntent().addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         .getOrElse { openAtomAppSettings() }
 }
 
@@ -1999,6 +2048,9 @@ private fun SettingsScreen(
                             onCheckedChange = {
                                 alarmMode = it
                                 alarmPreferences.alarmModeEnabled = it
+                                if (it && !context.hasFullScreenAlarmAccess()) {
+                                    context.openFullScreenAlarmSettings()
+                                }
                             },
                             colors = atomSwitchColors(),
                         )

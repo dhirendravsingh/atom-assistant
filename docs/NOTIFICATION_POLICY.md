@@ -11,7 +11,10 @@ On first launch, Atom explains and then requests notification and microphone
 runtime permissions in sequence. If exact-alarm access is missing, Atom opens
 Android's Alarms & reminders special-access screen. The owner must still choose
 Allow; Android does not permit Atom to grant these permissions to itself.
-Full-screen access is requested only when the owner uses optional Alarm Mode.
+On Android 14 and newer, Atom also opens the full-screen alarm access screen so
+Alarm Mode can wake the display and appear above the lock screen. Existing
+installs receive this one-time setup after updating. Enabling Alarm Mode later
+also opens the repair screen when this access is missing.
 No storage permission is requested because Room uses Atom's private internal
 application storage.
 
@@ -23,7 +26,8 @@ For each complete schedule Atom creates a local Android alarm:
   repair when exact-alarm access is unavailable.
 - Use a unique stable alarm identifier derived from the reminder occurrence.
 - Show a notification channel with sound, vibration, and lock-screen visibility.
-- Alarm Mode may launch a full-screen ringing screen until dismissed or snoozed.
+- Alarm Mode launches a full-screen ringing screen above the lock screen and
+  wakes the display until the reminder is dismissed, snoozed, or rescheduled.
 - A background push can be used as a backup signal, never as the primary timer.
 
 ## Scheduling rules
