@@ -1,3 +1,4 @@
+import AtomCore
 import SwiftData
 import SwiftUI
 
