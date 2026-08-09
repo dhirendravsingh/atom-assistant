@@ -1,10 +1,11 @@
 # Atom
 
-Atom is a personal, Android-first reminder assistant for Dhiren. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
+Atom is a personal, offline-first reminder assistant for Dhiren. It accepts natural text or voice-shaped commands, extracts scheduling details, asks once for anything missing, and is designed to deliver reminders reliably from the device.
 
 This repository currently contains two complementary surfaces:
 
 - `android/` — the real Kotlin + Jetpack Compose Android application UI.
+- `atom-ios/` — the separate native SwiftUI iPhone and iPad application.
 - `app/` — the approved interactive web prototype used to iterate on the visual direction.
 
 ## Current status
@@ -27,10 +28,27 @@ cd android
 The debug APK is written to:
 
 ```text
-android/app/build/outputs/apk/debug/app-debug.apk
+android/app/build/outputs/apk/debug/atom-android-debug.apk
 ```
 
-GitHub Actions runs the same tests and debug build whenever Android files change.
+The signed release artifact is named `atom-android-release.apk`.
+
+## Run the iOS app
+
+The iOS application requires the full Xcode application and iOS SDK. After
+installing Xcode and XcodeGen 2.46 or newer:
+
+```bash
+cd atom-ios
+xcodegen generate
+open atom-ios.xcodeproj
+```
+
+The iOS target and installed app are named `atom-ios`. Its platform-neutral
+parser and permission checks can also be run with `swift run AtomCoreChecks`; see
+`atom-ios/README.md` for current platform limitations.
+
+Separate GitHub Actions workflows validate Android and iOS changes.
 
 ## Run the web prototype
 

@@ -2,8 +2,8 @@
 
 ## Phase 1 — dependable single-device reminders
 
-Phase 1 is intentionally local-only. Atom serves one owner on one Android
-phone, and the private Room database on that phone is the only source of truth.
+Phase 1 is intentionally local-only. Atom serves one owner on Android and iOS.
+Each installation keeps its own private on-device database as its source of truth.
 Creating, editing, scheduling, ringing, snoozing, repeating, completing, and
 recovering reminders must not require an account, server, or internet access.
 
@@ -16,6 +16,12 @@ Phase 1 includes:
 - recurrence, missed-reminder handling, and device lifecycle recovery
 - notification, exact-alarm, and battery-reliability health reporting
 - release signing, on-device testing, and a signed Android APK
+- a separate SwiftUI `atom-ios` application using SwiftData, Apple speech, and
+  local User Notifications on iOS 17+
+
+The iOS 26 AlarmKit adapter, complete parser parity, signed IPA, and physical
+iPhone reliability testing remain release-hardening work that requires the full
+Xcode iOS SDK.
 
 Phase 1 explicitly excludes Railway, PostgreSQL, login, server APIs, cloud
 backup, cross-device synchronization, and an offline network sync queue.

@@ -1,0 +1,545 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0037230BCAC8AB3E03C4E934 /* CaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C18D50C0B22F0A3ED093B7E /* CaptureView.swift */; };
+		015D58EB7B38A8EB1D819F9A /* AtomIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09C2C8411C6C2FB681FDEE19 /* AtomIOSApp.swift */; };
+		2E3B4B7E3634BBCA1EC6D330 /* AtomIcon.svg in Resources */ = {isa = PBXBuildFile; fileRef = 2EF2DC6982A0A8827F6A9BDA /* AtomIcon.svg */; };
+		3D9AE72C204D3ABFAD5766F7 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2449EF07FD16904CD29F3967 /* SettingsView.swift */; };
+		4670AD541A7DA1EB2CA9BDDA /* AtomIOSSmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46467A4C462E39FC6A33E279 /* AtomIOSSmokeTests.swift */; };
+		4E1D94FDA45C32070C95AA70 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2002B6AACCD539C69A20896D /* NotificationScheduler.swift */; };
+		5EAFF30393C35FBC0AFA0B7F /* AtomRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC903D87E88AF3514663DA56 /* AtomRootView.swift */; };
+		74CD95990CFAA44B72D3707C /* ReminderListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */; };
+		8348D4F92AAEB90AD78FD323 /* SpeechCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D6247EB27E7C126C57F65C /* SpeechCaptureService.swift */; };
+		84694F976659D2A24E2FBC9D /* AtomCore in Frameworks */ = {isa = PBXBuildFile; productRef = CFF02B3CA2417FBD0AAFE995 /* AtomCore */; };
+		8F7224195F813246F75E830F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 91D724961D102FB2980967CF /* Assets.xcassets */; };
+		B17331499108AE8E4C5C1C33 /* AtomCore in Frameworks */ = {isa = PBXBuildFile; productRef = C7398B3AE393EE480CE6FF0C /* AtomCore */; };
+		CBA2839F72812A0E4F378200 /* AtomTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E39BACEE975695CD270189E /* AtomTheme.swift */; };
+		E5C91D4CBFC9534A51523E63 /* PermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F601A265F928D233ADA7A80 /* PermissionCoordinator.swift */; };
+		EBCD9E4D7DE9A7F5BE980FF5 /* ReminderRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		6A76F4A9E4BE3CEDB8969F69 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F176666C209AE3AFAFCD460F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 41BBF62C18B70926789FB7A1;
+			remoteInfo = "atom-ios";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		06D6247EB27E7C126C57F65C /* SpeechCaptureService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechCaptureService.swift; sourceTree = "<group>"; };
+		09C2C8411C6C2FB681FDEE19 /* AtomIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomIOSApp.swift; sourceTree = "<group>"; };
+		1C18D50C0B22F0A3ED093B7E /* CaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureView.swift; sourceTree = "<group>"; };
+		2002B6AACCD539C69A20896D /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
+		2449EF07FD16904CD29F3967 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2EF2DC6982A0A8827F6A9BDA /* AtomIcon.svg */ = {isa = PBXFileReference; path = AtomIcon.svg; sourceTree = "<group>"; };
+		3974D1B4784474CC5972F688 /* atom-ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "atom-ios"; path = .; sourceTree = SOURCE_ROOT; };
+		3BDC747A1E2141EB0515FE9D /* AtomIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtomIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		46467A4C462E39FC6A33E279 /* AtomIOSSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomIOSSmokeTests.swift; sourceTree = "<group>"; };
+		4E39BACEE975695CD270189E /* AtomTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomTheme.swift; sourceTree = "<group>"; };
+		4F601A265F928D233ADA7A80 /* PermissionCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCoordinator.swift; sourceTree = "<group>"; };
+		6A9C5C2FF3ACC5F302DCBA7E /* atom-ios.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "atom-ios.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderListView.swift; sourceTree = "<group>"; };
+		8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderRecord.swift; sourceTree = "<group>"; };
+		91D724961D102FB2980967CF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		EC903D87E88AF3514663DA56 /* AtomRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomRootView.swift; sourceTree = "<group>"; };
+		F40B74E0C7B55E6EF61CF62E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		056AFE33F7C22C48FD595C0C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B17331499108AE8E4C5C1C33 /* AtomCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		41F09EED0AAD7F936B656238 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				84694F976659D2A24E2FBC9D /* AtomCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		1FD6DB0D3E4FBC0FF4F62ACE /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				91D724961D102FB2980967CF /* Assets.xcassets */,
+				2EF2DC6982A0A8827F6A9BDA /* AtomIcon.svg */,
+				F40B74E0C7B55E6EF61CF62E /* Info.plist */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		70B02CFB03C3EAF93BABCD66 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				EC903D87E88AF3514663DA56 /* AtomRootView.swift */,
+				4E39BACEE975695CD270189E /* AtomTheme.swift */,
+				1C18D50C0B22F0A3ED093B7E /* CaptureView.swift */,
+				795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */,
+				2449EF07FD16904CD29F3967 /* SettingsView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		886EB8D6C639CF96E723936A /* AtomIOSTests */ = {
+			isa = PBXGroup;
+			children = (
+				46467A4C462E39FC6A33E279 /* AtomIOSSmokeTests.swift */,
+			);
+			path = AtomIOSTests;
+			sourceTree = "<group>";
+		};
+		98EDDE0669B0B42DEA82E7BC /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				3974D1B4784474CC5972F688 /* atom-ios */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		9CE7D7E3F4893012E27FFDEE /* AtomIOS */ = {
+			isa = PBXGroup;
+			children = (
+				F0993DB4BAFE21C8BFFE7E8A /* Models */,
+				1FD6DB0D3E4FBC0FF4F62ACE /* Resources */,
+				FA4F09221B1C4A7C98A82AB8 /* Services */,
+				70B02CFB03C3EAF93BABCD66 /* Views */,
+				09C2C8411C6C2FB681FDEE19 /* AtomIOSApp.swift */,
+			);
+			path = AtomIOS;
+			sourceTree = "<group>";
+		};
+		ED0910B75C78373C288575CF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				6A9C5C2FF3ACC5F302DCBA7E /* atom-ios.app */,
+				3BDC747A1E2141EB0515FE9D /* AtomIOSTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F0993DB4BAFE21C8BFFE7E8A /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		F2195D41D9BF487C3D0C7B88 = {
+			isa = PBXGroup;
+			children = (
+				9CE7D7E3F4893012E27FFDEE /* AtomIOS */,
+				886EB8D6C639CF96E723936A /* AtomIOSTests */,
+				98EDDE0669B0B42DEA82E7BC /* Packages */,
+				ED0910B75C78373C288575CF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		FA4F09221B1C4A7C98A82AB8 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				2002B6AACCD539C69A20896D /* NotificationScheduler.swift */,
+				4F601A265F928D233ADA7A80 /* PermissionCoordinator.swift */,
+				06D6247EB27E7C126C57F65C /* SpeechCaptureService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1C08721A230C08BC53BAD973 /* AtomIOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3CFAB9C352E30A9C7842E1A7 /* Build configuration list for PBXNativeTarget "AtomIOSTests" */;
+			buildPhases = (
+				11117A0E36216A380B65EAE0 /* Sources */,
+				056AFE33F7C22C48FD595C0C /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C5DA92C673FF583818C12AA4 /* PBXTargetDependency */,
+			);
+			name = AtomIOSTests;
+			packageProductDependencies = (
+				C7398B3AE393EE480CE6FF0C /* AtomCore */,
+			);
+			productName = AtomIOSTests;
+			productReference = 3BDC747A1E2141EB0515FE9D /* AtomIOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		41BBF62C18B70926789FB7A1 /* atom-ios */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F79103375C3A83B325B13825 /* Build configuration list for PBXNativeTarget "atom-ios" */;
+			buildPhases = (
+				0DB3FFB236933069D580FC39 /* Sources */,
+				602E5C9B1362A633A50E5C9D /* Resources */,
+				41F09EED0AAD7F936B656238 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "atom-ios";
+			packageProductDependencies = (
+				CFF02B3CA2417FBD0AAFE995 /* AtomCore */,
+			);
+			productName = "atom-ios";
+			productReference = 6A9C5C2FF3ACC5F302DCBA7E /* atom-ios.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		F176666C209AE3AFAFCD460F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					1C08721A230C08BC53BAD973 = {
+						DevelopmentTeam = "";
+					};
+					41BBF62C18B70926789FB7A1 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 5D5D5F71A9519D41CD03576A /* Build configuration list for PBXProject "atom-ios" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F2195D41D9BF487C3D0C7B88;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4F1FAFF58929AE0BB0F65B8F /* XCLocalSwiftPackageReference "." */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = ED0910B75C78373C288575CF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				41BBF62C18B70926789FB7A1 /* atom-ios */,
+				1C08721A230C08BC53BAD973 /* AtomIOSTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		602E5C9B1362A633A50E5C9D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8F7224195F813246F75E830F /* Assets.xcassets in Resources */,
+				2E3B4B7E3634BBCA1EC6D330 /* AtomIcon.svg in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0DB3FFB236933069D580FC39 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				015D58EB7B38A8EB1D819F9A /* AtomIOSApp.swift in Sources */,
+				5EAFF30393C35FBC0AFA0B7F /* AtomRootView.swift in Sources */,
+				CBA2839F72812A0E4F378200 /* AtomTheme.swift in Sources */,
+				0037230BCAC8AB3E03C4E934 /* CaptureView.swift in Sources */,
+				4E1D94FDA45C32070C95AA70 /* NotificationScheduler.swift in Sources */,
+				E5C91D4CBFC9534A51523E63 /* PermissionCoordinator.swift in Sources */,
+				74CD95990CFAA44B72D3707C /* ReminderListView.swift in Sources */,
+				EBCD9E4D7DE9A7F5BE980FF5 /* ReminderRecord.swift in Sources */,
+				3D9AE72C204D3ABFAD5766F7 /* SettingsView.swift in Sources */,
+				8348D4F92AAEB90AD78FD323 /* SpeechCaptureService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		11117A0E36216A380B65EAE0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4670AD541A7DA1EB2CA9BDDA /* AtomIOSSmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C5DA92C673FF583818C12AA4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 41BBF62C18B70926789FB7A1 /* atom-ios */;
+			targetProxy = 6A76F4A9E4BE3CEDB8969F69 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0376F3E05C1626454777EBF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dhiren.atom-ios.tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/atom-ios.app/atom-ios";
+			};
+			name = Debug;
+		};
+		16CEE4F467C29E691D63CE50 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		669D373E266B683E301AFD93 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtomIOS/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dhiren.atom-ios";
+				PRODUCT_NAME = "atom-ios";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		7D183DC52E6AEF257AC71CDA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		B381F1995B24567A71622647 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dhiren.atom-ios.tests";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/atom-ios.app/atom-ios";
+			};
+			name = Release;
+		};
+		BE18FDE27E3E71968F6FC313 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtomIOS/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.dhiren.atom-ios";
+				PRODUCT_NAME = "atom-ios";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3CFAB9C352E30A9C7842E1A7 /* Build configuration list for PBXNativeTarget "AtomIOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0376F3E05C1626454777EBF0 /* Debug */,
+				B381F1995B24567A71622647 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5D5D5F71A9519D41CD03576A /* Build configuration list for PBXProject "atom-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7D183DC52E6AEF257AC71CDA /* Debug */,
+				16CEE4F467C29E691D63CE50 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F79103375C3A83B325B13825 /* Build configuration list for PBXNativeTarget "atom-ios" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BE18FDE27E3E71968F6FC313 /* Debug */,
+				669D373E266B683E301AFD93 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		4F1FAFF58929AE0BB0F65B8F /* XCLocalSwiftPackageReference "." */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = .;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		C7398B3AE393EE480CE6FF0C /* AtomCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AtomCore;
+		};
+		CFF02B3CA2417FBD0AAFE995 /* AtomCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AtomCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = F176666C209AE3AFAFCD460F /* Project object */;
+}

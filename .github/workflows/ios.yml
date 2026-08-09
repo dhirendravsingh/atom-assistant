@@ -1,0 +1,46 @@
+name: iOS
+
+on:
+  push:
+    paths:
+      - "atom-ios/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "atom-ios/**"
+      - ".github/workflows/ios.yml"
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Test shared Atom core
+        working-directory: atom-ios
+        run: |
+          swift run AtomCoreChecks
+          swift test
+
+      - name: Check Swift formatting
+        working-directory: atom-ios
+        run: swift format lint --recursive Sources Tests Checks AtomIOS AtomIOSTests
+
+      - name: Generate Xcode project
+        working-directory: atom-ios
+        run: xcodegen generate
+
+      - name: Compile iOS application
+        working-directory: atom-ios
+        run: >-
+          xcodebuild
+          -project atom-ios.xcodeproj
+          -scheme atom-ios
+          -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO
+          build

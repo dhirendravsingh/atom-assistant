@@ -87,6 +87,16 @@ android {
     }
 }
 
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.forEach { output ->
+            (output as com.android.build.api.variant.impl.VariantOutputImpl).outputFileName.set(
+                "atom-android-${variant.buildType}.apk",
+            )
+        }
+    }
+}
+
 room {
     schemaDirectory("$projectDir/schemas")
 }
