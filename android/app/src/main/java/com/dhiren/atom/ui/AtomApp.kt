@@ -11,6 +11,9 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import com.dhiren.atom.AtomApplication
+import com.dhiren.atom.data.GenderOption
+import com.dhiren.atom.data.OwnerProfile
+import com.dhiren.atom.data.PronounOption
 import com.dhiren.atom.nlp.AtomCommandParser
 import com.dhiren.atom.nlp.CommandIntent
 import com.dhiren.atom.nlp.MissingField
@@ -40,6 +43,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -83,10 +88,10 @@ import androidx.compose.material.icons.rounded.KeyboardVoice
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.ListAlt
-import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
@@ -162,8 +167,6 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.launch
 
-private const val OwnerName = "Dhiren Sir"
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AtomApp() {
@@ -171,7 +174,11 @@ fun AtomApp() {
     val reminderRepository = remember(context) {
         (context.applicationContext as AtomApplication).reminderRepository
     }
+    val ownerProfileRepository = remember(context) {
+        (context.applicationContext as AtomApplication).ownerProfileRepository
+    }
     val reminders by reminderRepository.reminders.collectAsState(initial = emptyList())
+    val ownerProfile by ownerProfileRepository.profile.collectAsState(initial = OwnerProfile.Default)
     val persistenceScope = rememberCoroutineScope()
     val systemDark = androidx.compose.foundation.isSystemInDarkTheme()
     var darkTheme by rememberSaveable { mutableStateOf(systemDark) }
@@ -239,6 +246,7 @@ fun AtomApp() {
                         when (screen) {
                             AtomScreen.Today -> HomeScreen(
                                 reminders = reminders,
+                                ownerProfile = ownerProfile,
                                 darkTheme = darkTheme,
                                 selectedLogo = selectedLogo,
                                 onToggleTheme = { darkTheme = !darkTheme },
@@ -289,11 +297,17 @@ fun AtomApp() {
                             )
 
                             AtomScreen.Settings -> SettingsScreen(
+                                ownerProfile = ownerProfile,
                                 darkTheme = darkTheme,
                                 selectedLogo = selectedLogo,
                                 onToggleTheme = { darkTheme = !darkTheme },
                                 onChooseLogo = { showLogoGallery = true },
                                 onAlarmPreview = { showAlarmPreview = true },
+                                onSaveProfile = { name, gender, pronouns ->
+                                    persistenceScope.launch {
+                                        ownerProfileRepository.update(name, gender, pronouns)
+                                    }
+                                },
                             )
                         }
                     }
@@ -339,6 +353,7 @@ private fun ScreenFrame(content: @Composable () -> Unit) {
 @Composable
 private fun HomeScreen(
     reminders: List<ReminderUi>,
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
@@ -358,6 +373,7 @@ private fun HomeScreen(
                 .padding(top = 10.dp, bottom = 30.dp),
         ) {
             AppHeader(
+                ownerProfile = ownerProfile,
                 darkTheme = darkTheme,
                 selectedLogo = selectedLogo,
                 onToggleTheme = onToggleTheme,
@@ -365,7 +381,10 @@ private fun HomeScreen(
                 onNotifications = onShowAlarm,
             )
             Spacer(Modifier.height(28.dp))
-            GreetingCard(scheduledCount = reminders.count { it.state == ReminderState.Scheduled })
+            GreetingCard(
+                ownerProfile = ownerProfile,
+                scheduledCount = reminders.count { it.state == ReminderState.Scheduled },
+            )
             Spacer(Modifier.height(18.dp))
             QuickCaptureCard(onCapture = onCapture)
             Spacer(Modifier.height(28.dp))
@@ -402,6 +421,7 @@ private fun HomeScreen(
 
 @Composable
 private fun AppHeader(
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
@@ -447,7 +467,7 @@ private fun AppHeader(
                 .background(colors.ink),
             contentAlignment = Alignment.Center,
         ) {
-            Text("D", color = colors.canvas, fontWeight = FontWeight.SemiBold)
+            Text(ownerProfile.initial, color = colors.canvas, fontWeight = FontWeight.SemiBold)
         }
     }
 }
@@ -471,7 +491,7 @@ private fun HeaderIcon(
 }
 
 @Composable
-private fun GreetingCard(scheduledCount: Int) {
+private fun GreetingCard(ownerProfile: OwnerProfile, scheduledCount: Int) {
     val colors = LocalAtomPalette.current
     val locale = LocalConfiguration.current.locales[0]
     val now = remember { LocalDateTime.now() }
@@ -497,7 +517,7 @@ private fun GreetingCard(scheduledCount: Int) {
                 Text(
                     buildAnnotatedString {
                         append("${greetingForHour(now.hour)},\n")
-                        withStyle(SpanStyle(color = colors.mintDark)) { append("$OwnerName.") }
+                        withStyle(SpanStyle(color = colors.mintDark)) { append("${ownerProfile.greetingName}.") }
                     },
                     color = colors.ink,
                     style = MaterialTheme.typography.headlineMedium,
@@ -1666,11 +1686,13 @@ private fun EmptyReminders(onAdd: () -> Unit) {
 
 @Composable
 private fun SettingsScreen(
+    ownerProfile: OwnerProfile,
     darkTheme: Boolean,
     selectedLogo: LogoVariant,
     onToggleTheme: () -> Unit,
     onChooseLogo: () -> Unit,
     onAlarmPreview: () -> Unit,
+    onSaveProfile: (String, GenderOption, PronounOption) -> Unit,
 ) {
     val colors = LocalAtomPalette.current
     val context = LocalContext.current
@@ -1697,6 +1719,7 @@ private fun SettingsScreen(
     var alarmMode by rememberSaveable { mutableStateOf(alarmPreferences.alarmModeEnabled) }
     var aiFallback by rememberSaveable { mutableStateOf(false) }
     var showPrefixes by rememberSaveable { mutableStateOf(false) }
+    var showProfileEditor by rememberSaveable { mutableStateOf(false) }
     val locale = remember { Locale.getDefault().displayName }
     val timezone = remember { ZoneId.systemDefault().id }
     val reliability = remember(reliabilityRefresh) { reliabilityMonitor.snapshot() }
@@ -1723,27 +1746,42 @@ private fun SettingsScreen(
             Text("SETTINGS", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.2.sp)
             Text("Make Atom yours", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(22.dp))
-            Surface(color = colors.ink, shape = RoundedCornerShape(26.dp), modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                color = colors.ink,
+                shape = RoundedCornerShape(26.dp),
+                modifier = Modifier.fillMaxWidth().clickable { showProfileEditor = true },
+            ) {
                 Row(modifier = Modifier.padding(19.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(
                         modifier = Modifier.size(52.dp).clip(CircleShape).background(colors.mint),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text("D", color = Color(0xFF092117), style = MaterialTheme.typography.titleLarge)
+                        Text(ownerProfile.initial, color = Color(0xFF092117), style = MaterialTheme.typography.titleLarge)
                     }
                     Spacer(Modifier.width(14.dp))
                     Column {
-                        Text(OwnerName, color = colors.quickCardText, style = MaterialTheme.typography.titleMedium)
-                        Text("Atom’s sole owner", color = colors.quickCardText.copy(alpha = .58f), style = MaterialTheme.typography.bodyMedium)
+                        Text(ownerProfile.greetingName, color = colors.quickCardText, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "${ownerProfile.pronouns.label} · Atom’s sole owner",
+                            color = colors.quickCardText.copy(alpha = .58f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
                     }
                     Spacer(Modifier.weight(1f))
-                    Icon(Icons.Rounded.Lock, null, tint = colors.mint, modifier = Modifier.size(19.dp))
+                    Icon(Icons.Rounded.Edit, "Edit profile", tint = colors.mint, modifier = Modifier.size(19.dp))
                 }
             }
             Spacer(Modifier.height(25.dp))
             SettingsLabel("PERSONALIZATION")
             Spacer(Modifier.height(9.dp))
             SettingsGroup {
+                SettingsRow(
+                    icon = Icons.Rounded.Person,
+                    title = "Profile",
+                    subtitle = "${ownerProfile.displayName} · ${ownerProfile.gender.label} · ${ownerProfile.pronouns.label}",
+                    onClick = { showProfileEditor = true },
+                )
+                SettingsDivider()
                 SettingsRow(
                     icon = if (darkTheme) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
                     title = "Appearance",
@@ -1867,6 +1905,168 @@ private fun SettingsScreen(
 
     if (showPrefixes) {
         PrefixesDialog(onDismiss = { showPrefixes = false })
+    }
+    if (showProfileEditor) {
+        ProfileEditorSheet(
+            profile = ownerProfile,
+            onDismiss = { showProfileEditor = false },
+            onSave = { name, gender, pronouns ->
+                onSaveProfile(name, gender, pronouns)
+                showProfileEditor = false
+            },
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun ProfileEditorSheet(
+    profile: OwnerProfile,
+    onDismiss: () -> Unit,
+    onSave: (String, GenderOption, PronounOption) -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var name by remember(profile.displayName) { mutableStateOf(profile.displayName) }
+    var gender by remember(profile.gender) { mutableStateOf(profile.gender) }
+    var pronouns by remember(profile.pronouns) { mutableStateOf(profile.pronouns) }
+    val normalizedName = name.trim().replace(Regex("\\s+"), " ")
+    val preview = profile.copy(
+        displayName = normalizedName.ifEmpty { "Your name" },
+        gender = gender,
+        pronouns = pronouns,
+    )
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = colors.elevated,
+        contentColor = colors.ink,
+        dragHandle = {
+            Box(
+                Modifier
+                    .padding(top = 11.dp, bottom = 7.dp)
+                    .size(width = 40.dp, height = 4.dp)
+                    .clip(CircleShape)
+                    .background(colors.line),
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+        ) {
+            Text("Your profile", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(5.dp))
+            Text(
+                "Atom keeps these details only on this phone and uses them to personalize your greeting.",
+                color = colors.muted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(20.dp))
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it.take(40) },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Name") },
+                placeholder = { Text("What should Atom call you?") },
+                leadingIcon = { Icon(Icons.Rounded.Person, null) },
+                shape = RoundedCornerShape(17.dp),
+            )
+            Spacer(Modifier.height(20.dp))
+            ProfileFieldLabel("Gender")
+            Spacer(Modifier.height(9.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                GenderOption.entries.forEach { option ->
+                    ProfileChoiceChip(
+                        label = option.label,
+                        selected = option == gender,
+                        onClick = { gender = option },
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
+            ProfileFieldLabel("Pronouns")
+            Spacer(Modifier.height(9.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                PronounOption.entries.forEach { option ->
+                    ProfileChoiceChip(
+                        label = option.label,
+                        selected = option == pronouns,
+                        onClick = { pronouns = option },
+                    )
+                }
+            }
+            Spacer(Modifier.height(22.dp))
+            Surface(color = colors.paper, shape = RoundedCornerShape(19.dp), modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("GREETING PREVIEW", color = colors.muted, style = MaterialTheme.typography.labelMedium, letterSpacing = 1.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "${greetingForHour(LocalDateTime.now().hour)}, ${preview.greetingName}.",
+                        color = colors.ink,
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
+            }
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = { onSave(normalizedName, gender, pronouns) },
+                enabled = normalizedName.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(17.dp),
+            ) {
+                Text("Save profile")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfileFieldLabel(text: String) {
+    Text(
+        text,
+        color = LocalAtomPalette.current.ink,
+        style = MaterialTheme.typography.titleMedium,
+    )
+}
+
+@Composable
+private fun ProfileChoiceChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    Surface(
+        color = if (selected) colors.mintPale else colors.surface,
+        contentColor = if (selected) colors.mintDark else colors.ink,
+        shape = RoundedCornerShape(50),
+        modifier = Modifier
+            .border(1.dp, if (selected) colors.mint else colors.line, RoundedCornerShape(50))
+            .clickable(onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (selected) {
+                Icon(Icons.Rounded.Check, null, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(5.dp))
+            }
+            Text(label, style = MaterialTheme.typography.labelLarge)
+        }
     }
 }
 

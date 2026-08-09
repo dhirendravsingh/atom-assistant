@@ -2,6 +2,7 @@ package com.dhiren.atom
 
 import android.app.Application
 import com.dhiren.atom.data.ReminderRepository
+import com.dhiren.atom.data.OwnerProfileRepository
 import com.dhiren.atom.data.local.AtomDatabase
 import com.dhiren.atom.notifications.AndroidReminderAlarmScheduler
 import com.dhiren.atom.notifications.AlarmReconciliationReason
@@ -42,6 +43,10 @@ class AtomApplication : Application() {
             reminderDao = database.reminderDao(),
             alarmScheduler = alarmScheduler,
         )
+    }
+
+    val ownerProfileRepository: OwnerProfileRepository by lazy {
+        OwnerProfileRepository(database.ownerProfileDao())
     }
 
     val deviceReliabilityManager by lazy {

@@ -2,17 +2,19 @@
 
 ## Scope
 
-Atom is designed for one owner, Dhiren Sir. Phase 1 stores only the information
-needed to operate reminders: owner profile, reminder text, schedule, recurrence,
-delivery state, timezone, locale, and minimal diagnostic metadata.
+Atom is designed for one owner. Phase 1 stores only the information needed to
+operate and personalize reminders: the chosen name, gender option, pronoun
+option, reminder text, schedule, recurrence, delivery state, timezone, locale,
+and minimal diagnostic metadata. Gender and pronouns may be set to “Prefer not
+to say.”
 
 ## Local-first data
 
-The Android Room database is the only data store in Phase 1. No reminder data
-is sent to Railway or PostgreSQL. If the owner explicitly enables the optional
-Phase 2 synchronization feature in the future, Railway PostgreSQL may receive
-the minimum structured reminder data required for backup and recovery while
-Room remains the operational source of truth.
+The Android Room database is the only data store in Phase 1. No profile or
+reminder data is sent to Railway or PostgreSQL. If the owner explicitly enables
+the optional Phase 2 synchronization feature in the future, Railway PostgreSQL
+may receive the minimum structured profile and reminder data required for
+backup and recovery while Room remains the operational source of truth.
 
 Voice is transcribed through Android's speech-recognition service. On Android
 12 and newer, Atom only enables voice when Android reports that the dedicated
