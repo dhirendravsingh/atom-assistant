@@ -116,15 +116,15 @@ final class NotificationScheduler: NSObject, UNUserNotificationCenterDelegate {
     default:
       break
     }
+  }
 
-    func drainRecordedActions() -> [NotificationActionMutation] {
-      let defaults = UserDefaults.standard
-      guard let data = defaults.data(forKey: actionStoreKey),
-        let actions = try? JSONDecoder().decode([NotificationActionMutation].self, from: data)
-      else { return [] }
-      defaults.removeObject(forKey: actionStoreKey)
-      return actions
-    }
+  func drainRecordedActions() -> [NotificationActionMutation] {
+    let defaults = UserDefaults.standard
+    guard let data = defaults.data(forKey: actionStoreKey),
+      let actions = try? JSONDecoder().decode([NotificationActionMutation].self, from: data)
+    else { return [] }
+    defaults.removeObject(forKey: actionStoreKey)
+    return actions
   }
 
   private func reminderContent(id: UUID, title: String) -> UNMutableNotificationContent {
