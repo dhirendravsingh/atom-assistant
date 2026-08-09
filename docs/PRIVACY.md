@@ -16,6 +16,10 @@ the optional Phase 2 synchronization feature in the future, Railway PostgreSQL
 may receive the minimum structured profile and reminder data required for
 backup and recovery while Room remains the operational source of truth.
 
+Room writes `atom.db` inside Atom's private internal application storage. Atom
+does not request permission to read photos, shared files, media, or external
+storage.
+
 Voice is transcribed through Android's speech-recognition service. On Android
 12 and newer, Atom only enables voice when Android reports that the dedicated
 on-device recognizer is available. On older supported Android versions, Atom

@@ -16,7 +16,7 @@
 | Device reboot or app upgrade | Reconcile all future alarms from Room |
 | Timezone or clock changes | Recompute future occurrences from stored local values and IANA timezone |
 | Device is off at trigger time | After boot, show one missed-reminder notification when the occurrence is at most 24 hours old; retain older one-offs in the Missed list without a noisy alert |
-| Battery optimization is active | Show a reliability warning and link to Android's battery-optimization settings without claiming alarms are guaranteed |
+| Battery optimization is active | Continue normally; expose an optional troubleshooting link without marking Atom unhealthy |
 | App is force-stopped | Show an explicit reliability warning after next launch |
 | Phase 2 Railway is offline | Continue locally from Room and queue idempotent sync operations; Phase 1 has no server dependency |
 | Sync conflict | Prefer the latest owner-confirmed mutation; retain an audit entry |

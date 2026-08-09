@@ -7,6 +7,14 @@ truth on the phone. Railway PostgreSQL is deferred to an optional Phase 2
 encrypted synchronization and backup copy. A network connection is not
 required to create, edit, ring, snooze, complete, or cancel a reminder.
 
+On first launch, Atom explains and then requests notification and microphone
+runtime permissions in sequence. If exact-alarm access is missing, Atom opens
+Android's Alarms & reminders special-access screen. The owner must still choose
+Allow; Android does not permit Atom to grant these permissions to itself.
+Full-screen access is requested only when the owner uses optional Alarm Mode.
+No storage permission is requested because Room uses Atom's private internal
+application storage.
+
 For each complete schedule Atom creates a local Android alarm:
 
 - Use `AlarmManager.setExactAndAllowWhileIdle` when exact-alarm permission is
@@ -50,9 +58,14 @@ deduplicated local backlog of missed occurrences and retries it after access is
 restored; advancing a recurrence never silently discards its blocked alert.
 
 The Settings screen reports notification permission, exact-alarm permission,
-battery optimization risk, and the time of the last successful reconciliation.
+optional battery troubleshooting information, and the time of the last
+successful reconciliation.
 The status refreshes after returning from Android settings. Atom also reruns
 reconciliation when exact-alarm access changes.
+
+Battery-optimization exemption is not a permission requirement and is never
+part of first-launch setup or notification health. It remains an optional
+troubleshooting link for unusually aggressive device-manufacturer behavior.
 
 ## Delivery actions
 

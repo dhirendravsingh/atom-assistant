@@ -24,6 +24,9 @@ import com.dhiren.atom.speech.SpeechCaptureState
 import com.dhiren.atom.speech.SpeechInputTarget
 import com.dhiren.atom.notifications.AlarmPreferences
 import com.dhiren.atom.notifications.AlarmReconciliationReason
+import com.dhiren.atom.permissions.InitialPermissionOnboardingPreferences
+import com.dhiren.atom.permissions.InitialPermissionStep
+import com.dhiren.atom.permissions.initialPermissionPlan
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -118,6 +121,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -188,6 +192,16 @@ fun AtomApp() {
     var showAlarmPreview by rememberSaveable { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderUi?>(null) }
     var pendingNotificationSave by remember { mutableStateOf<ReminderUi?>(null) }
+    val permissionOnboardingPreferences = remember(context) {
+        InitialPermissionOnboardingPreferences(context)
+    }
+    val firstLaunchPermissionPlan = remember(context) { context.pendingInitialPermissionSteps() }
+    var showInitialPermissionSetup by rememberSaveable {
+        mutableStateOf(
+            !permissionOnboardingPreferences.completed && firstLaunchPermissionPlan.isNotEmpty(),
+        )
+    }
+    var permissionSetupStep by remember { mutableStateOf<InitialPermissionStep?>(null) }
 
     fun persistReminder(reminder: ReminderUi) {
         persistenceScope.launch {
@@ -202,6 +216,60 @@ fun AtomApp() {
     ) {
         pendingNotificationSave?.let(::persistReminder)
         pendingNotificationSave = null
+    }
+
+    val initialNotificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.Microphone
+    }
+    val initialMicrophonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) {
+        permissionSetupStep = InitialPermissionStep.ExactAlarms
+    }
+
+    LaunchedEffect(firstLaunchPermissionPlan) {
+        if (firstLaunchPermissionPlan.isEmpty()) {
+            permissionOnboardingPreferences.completed = true
+        }
+    }
+    LaunchedEffect(permissionSetupStep) {
+        when (permissionSetupStep) {
+            InitialPermissionStep.Notifications -> {
+                if (
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionSetupStep = InitialPermissionStep.Microphone
+                } else {
+                    initialNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
+
+            InitialPermissionStep.Microphone -> {
+                if (
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                ) {
+                    permissionSetupStep = InitialPermissionStep.ExactAlarms
+                } else {
+                    initialMicrophonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            }
+
+            InitialPermissionStep.ExactAlarms -> {
+                permissionOnboardingPreferences.completed = true
+                permissionSetupStep = null
+                if (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                    !context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+                ) {
+                    context.openExactAlarmSettings()
+                }
+            }
+
+            null -> Unit
+        }
     }
 
     AtomTheme(darkTheme = darkTheme) {
@@ -328,6 +396,106 @@ fun AtomApp() {
             if (showAlarmPreview) {
                 AlarmPreview(onDismiss = { showAlarmPreview = false })
             }
+
+            if (showInitialPermissionSetup) {
+                InitialPermissionSetupDialog(
+                    onContinue = {
+                        showInitialPermissionSetup = false
+                        permissionSetupStep = firstLaunchPermissionPlan.firstOrNull()
+                    },
+                    onNotNow = {
+                        permissionOnboardingPreferences.completed = true
+                        showInitialPermissionSetup = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+private fun Context.pendingInitialPermissionSteps(): List<InitialPermissionStep> {
+    val notificationGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    val microphoneGranted =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    val exactAlarmAccessGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    return initialPermissionPlan(
+        notificationsGranted = notificationGranted,
+        microphoneGranted = microphoneGranted,
+        exactAlarmAccessGranted = exactAlarmAccessGranted,
+    )
+}
+
+@Composable
+private fun InitialPermissionSetupDialog(
+    onContinue: () -> Unit,
+    onNotNow: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    AlertDialog(
+        onDismissRequest = onNotNow,
+        containerColor = colors.elevated,
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Text("Set up Atom", color = colors.ink, style = MaterialTheme.typography.titleLarge)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "Allow these once so Atom can listen and remind you reliably.",
+                    color = colors.muted,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.NotificationsActive,
+                    title = "Notifications",
+                    detail = "Show reminders with sound and vibration",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.Mic,
+                    title = "Microphone",
+                    detail = "Listen only after you tap the mic",
+                )
+                PermissionSetupRow(
+                    icon = Icons.Rounded.Alarm,
+                    title = "Alarms & reminders",
+                    detail = "Trigger reminders at the requested time",
+                )
+                Text(
+                    "No photo, file, or storage permission is needed. Room saves reminders inside Atom’s private app storage.",
+                    color = colors.muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onContinue) { Text("Continue") }
+        },
+        dismissButton = {
+            TextButton(onClick = onNotNow) { Text("Not now") }
+        },
+    )
+}
+
+@Composable
+private fun PermissionSetupRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    detail: String,
+) {
+    val colors = LocalAtomPalette.current
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier.size(38.dp).clip(RoundedCornerShape(13.dp)).background(colors.paper),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = colors.mintDark, modifier = Modifier.size(19.dp))
+        }
+        Spacer(Modifier.width(11.dp))
+        Column {
+            Text(title, color = colors.ink, style = MaterialTheme.typography.titleSmall)
+            Text(detail, color = colors.muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -850,6 +1018,15 @@ private fun Context.openAtomAppSettings() {
             Uri.fromParts("package", packageName, null),
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
     )
+}
+
+private fun Context.openExactAlarmSettings() {
+    val intent = Intent(
+        Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+        Uri.fromParts("package", packageName, null),
+    )
+    runCatching { startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .getOrElse { openAtomAppSettings() }
 }
 
 private fun Context.openNotificationRepairSettings() {
@@ -1845,13 +2022,13 @@ private fun SettingsScreen(
                 SettingsDivider()
                 SettingsRow(
                     icon = Icons.Rounded.NotificationsNone,
-                    title = "Battery optimization",
+                    title = "Battery troubleshooting",
                     subtitle = if (reliability.batteryOptimizationExempt) {
-                        "Atom is exempt from Android battery restrictions"
+                        "Unrestricted battery access is already enabled"
                     } else {
-                        "Android or the device maker may delay background work"
+                        "Optional only · not required for normal alarm delivery"
                     },
-                    badge = if (reliability.batteryOptimizationExempt) "Ready" else "Review",
+                    badge = "Optional",
                     onClick = {
                         if (!reliability.batteryOptimizationExempt) context.openBatteryOptimizationSettings()
                     },
