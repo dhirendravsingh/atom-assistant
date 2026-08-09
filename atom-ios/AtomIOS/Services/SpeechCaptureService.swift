@@ -70,10 +70,10 @@ final class SpeechCaptureService: ObservableObject {
       Task { @MainActor in
         guard let self else { return }
         if let result {
-          transcript = result.bestTranscription.formattedString
-          if result.isFinal { stop() }
+          self.transcript = result.bestTranscription.formattedString
+          if result.isFinal { self.stop() }
         }
-        if error != nil { stop() }
+        if error != nil { self.stop() }
       }
     }
   }

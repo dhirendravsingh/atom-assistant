@@ -34,7 +34,7 @@ struct SettingsView: View {
         .pickerStyle(.segmented)
       }
 
-      Section("REMINDER ACCESS") {
+      Section {
         permissionRow(
           title: "Notifications",
           ready: permissions.notificationGranted
@@ -48,6 +48,8 @@ struct SettingsView: View {
           ready: permissions.speechGranted
         )
         Button("Open iOS Settings") { permissions.openSettings() }
+      } header: {
+        Text("REMINDER ACCESS")
       } footer: {
         Text(
           "No storage permission is needed. Reminders remain in atom-ios private storage. iOS 17–25 use local notifications; AlarmKit support requires the iOS 26 SDK."
