@@ -113,6 +113,18 @@ class ReminderRepository(
         return newId
     }
 
+    suspend fun ignore(id: Long) {
+        val existing = reminderDao.getById(id) ?: return
+        if (existing.recurrenceRule != null) return
+        alarmScheduler.cancel(id)
+        reminderDao.upsert(
+            existing.copy(
+                state = ReminderState.Missed.name,
+                updatedAtUtc = Instant.now(clock).toString(),
+            ),
+        )
+    }
+
     suspend fun advanceRecurringAfterDelivery(id: Long) {
         val existing = reminderDao.getById(id) ?: return
         if (existing.recurrenceRule == null) return

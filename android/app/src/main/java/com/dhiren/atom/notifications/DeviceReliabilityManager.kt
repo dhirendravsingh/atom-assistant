@@ -1,6 +1,8 @@
 package com.dhiren.atom.notifications
 
 import com.dhiren.atom.data.ReminderRepository
+import com.dhiren.atom.data.NotificationHistoryEventType
+import com.dhiren.atom.data.NotificationHistoryRepository
 import java.time.Clock
 import java.time.Instant
 import kotlinx.coroutines.sync.Mutex
@@ -9,6 +11,7 @@ import kotlinx.coroutines.sync.withLock
 class DeviceReliabilityManager(
     private val reminderRepository: ReminderRepository,
     private val notificationCenter: AtomNotificationCenter,
+    private val notificationHistoryRepository: NotificationHistoryRepository,
     private val preferences: ReliabilityPreferences,
     private val clock: Clock = Clock.systemUTC(),
     val monitor: DeviceReliabilityMonitor,
@@ -35,7 +38,13 @@ class DeviceReliabilityManager(
                             reminderId = occurrence.reminderId,
                             title = occurrence.title,
                             scheduledAt = occurrence.scheduledAt,
-                        ) -> {
+                    ) -> {
+                        notificationHistoryRepository.record(
+                            reminderId = occurrence.reminderId,
+                            title = occurrence.title,
+                            eventType = NotificationHistoryEventType.Missed,
+                            detail = "Delivered after the device became available",
+                        )
                         if (!occurrence.recurring) {
                             reminderRepository.markMissed(occurrence.reminderId, occurrence.scheduledAt)
                         }

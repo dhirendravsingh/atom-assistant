@@ -44,3 +44,14 @@ jobs:
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
           build
+
+      - name: Test iOS application target
+        working-directory: atom-ios
+        run: >-
+          xcodebuild
+          -project atom-ios.xcodeproj
+          -scheme atom-ios
+          -sdk iphonesimulator
+          -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=latest'
+          CODE_SIGNING_ALLOWED=NO
+          test

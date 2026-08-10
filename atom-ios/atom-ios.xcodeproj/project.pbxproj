@@ -17,8 +17,10 @@
 		74CD95990CFAA44B72D3707C /* ReminderListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */; };
 		8348D4F92AAEB90AD78FD323 /* SpeechCaptureService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D6247EB27E7C126C57F65C /* SpeechCaptureService.swift */; };
 		84694F976659D2A24E2FBC9D /* AtomCore in Frameworks */ = {isa = PBXBuildFile; productRef = CFF02B3CA2417FBD0AAFE995 /* AtomCore */; };
+		88546AC216D9509ACB071EFB /* NotificationHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3981E36EDED9E31B1FEEB649 /* NotificationHistoryView.swift */; };
 		8F7224195F813246F75E830F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 91D724961D102FB2980967CF /* Assets.xcassets */; };
 		B17331499108AE8E4C5C1C33 /* AtomCore in Frameworks */ = {isa = PBXBuildFile; productRef = C7398B3AE393EE480CE6FF0C /* AtomCore */; };
+		C856C4C2D5B809072F04785F /* NotificationHistoryRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9337456CBB3527890D224CBA /* NotificationHistoryRecord.swift */; };
 		CBA2839F72812A0E4F378200 /* AtomTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E39BACEE975695CD270189E /* AtomTheme.swift */; };
 		E5C91D4CBFC9534A51523E63 /* PermissionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F601A265F928D233ADA7A80 /* PermissionCoordinator.swift */; };
 		EBCD9E4D7DE9A7F5BE980FF5 /* ReminderRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */; };
@@ -42,6 +44,7 @@
 		2449EF07FD16904CD29F3967 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		2EF2DC6982A0A8827F6A9BDA /* AtomIcon.svg */ = {isa = PBXFileReference; path = AtomIcon.svg; sourceTree = "<group>"; };
 		3974D1B4784474CC5972F688 /* atom-ios */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "atom-ios"; path = .; sourceTree = SOURCE_ROOT; };
+		3981E36EDED9E31B1FEEB649 /* NotificationHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationHistoryView.swift; sourceTree = "<group>"; };
 		3BDC747A1E2141EB0515FE9D /* AtomIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = AtomIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		46467A4C462E39FC6A33E279 /* AtomIOSSmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomIOSSmokeTests.swift; sourceTree = "<group>"; };
 		4E39BACEE975695CD270189E /* AtomTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomTheme.swift; sourceTree = "<group>"; };
@@ -50,6 +53,7 @@
 		795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderListView.swift; sourceTree = "<group>"; };
 		8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderRecord.swift; sourceTree = "<group>"; };
 		91D724961D102FB2980967CF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9337456CBB3527890D224CBA /* NotificationHistoryRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationHistoryRecord.swift; sourceTree = "<group>"; };
 		EC903D87E88AF3514663DA56 /* AtomRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomRootView.swift; sourceTree = "<group>"; };
 		F40B74E0C7B55E6EF61CF62E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -90,6 +94,7 @@
 				EC903D87E88AF3514663DA56 /* AtomRootView.swift */,
 				4E39BACEE975695CD270189E /* AtomTheme.swift */,
 				1C18D50C0B22F0A3ED093B7E /* CaptureView.swift */,
+				3981E36EDED9E31B1FEEB649 /* NotificationHistoryView.swift */,
 				795F67D5E52C1074B7A2B2D2 /* ReminderListView.swift */,
 				2449EF07FD16904CD29F3967 /* SettingsView.swift */,
 			);
@@ -136,6 +141,7 @@
 		F0993DB4BAFE21C8BFFE7E8A /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				9337456CBB3527890D224CBA /* NotificationHistoryRecord.swift */,
 				8EE5C41D162543E3C4ECCE60 /* ReminderRecord.swift */,
 			);
 			path = Models;
@@ -266,6 +272,8 @@
 				5EAFF30393C35FBC0AFA0B7F /* AtomRootView.swift in Sources */,
 				CBA2839F72812A0E4F378200 /* AtomTheme.swift in Sources */,
 				0037230BCAC8AB3E03C4E934 /* CaptureView.swift in Sources */,
+				C856C4C2D5B809072F04785F /* NotificationHistoryRecord.swift in Sources */,
+				88546AC216D9509ACB071EFB /* NotificationHistoryView.swift in Sources */,
 				4E1D94FDA45C32070C95AA70 /* NotificationScheduler.swift in Sources */,
 				E5C91D4CBFC9534A51523E63 /* PermissionCoordinator.swift in Sources */,
 				74CD95990CFAA44B72D3707C /* ReminderListView.swift in Sources */,

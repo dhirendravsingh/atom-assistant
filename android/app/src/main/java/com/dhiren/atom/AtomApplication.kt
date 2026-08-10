@@ -1,6 +1,7 @@
 package com.dhiren.atom
 
 import android.app.Application
+import com.dhiren.atom.data.NotificationHistoryRepository
 import com.dhiren.atom.data.ReminderRepository
 import com.dhiren.atom.data.OwnerProfileRepository
 import com.dhiren.atom.data.local.AtomDatabase
@@ -49,10 +50,15 @@ class AtomApplication : Application() {
         OwnerProfileRepository(database.ownerProfileDao())
     }
 
+    val notificationHistoryRepository: NotificationHistoryRepository by lazy {
+        NotificationHistoryRepository(database.notificationHistoryDao())
+    }
+
     val deviceReliabilityManager by lazy {
         DeviceReliabilityManager(
             reminderRepository = reminderRepository,
             notificationCenter = notificationCenter,
+            notificationHistoryRepository = notificationHistoryRepository,
             preferences = reliabilityPreferences,
             monitor = deviceReliabilityMonitor,
         )

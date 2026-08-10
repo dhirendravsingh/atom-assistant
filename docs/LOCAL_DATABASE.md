@@ -5,7 +5,7 @@ SQLite file named `atom.db` automatically when the application first accesses
 the database. The owner does not need to provision a service, create
 credentials, or initialize a database manually.
 
-## Version 2 schema
+## Version 3 schema
 
 ### `owner_profile`
 
@@ -28,6 +28,15 @@ Each reminder stores:
 The database stores time in a normalized machine-readable form. Atom continues
 to display all times in 12-hour format with AM or PM.
 
+### `notification_history`
+
+Each Android alarm event stores the reminder identifier and title, the event
+type, a short status detail, its UTC occurrence time, an optional resulting
+schedule, and whether the event has been read. Rows deliberately do not use a
+foreign key so history remains understandable after a reminder is deleted.
+The matching iOS application stores the same activity in private SwiftData.
+Both notification views order the newest event first.
+
 ## Lifecycle
 
 - Creating, editing and deleting reminders writes through `ReminderRepository`.
@@ -41,6 +50,9 @@ to display all times in 12-hour format with AM or PM.
 Migration 1 → 2 adds gender and pronouns without deleting reminders. It also
 normalizes the original `Dhiren Sir` value to `Dhiren`, because the greeting now
 adds `Sir` dynamically from the selected gender.
+
+Migration 2 → 3 adds the notification history table without changing or
+deleting profiles or reminders.
 
 Phase 1 has no external database. Railway PostgreSQL is deferred to the optional
 Phase 2 backup and synchronization work described in `ROADMAP.md`. Even then,

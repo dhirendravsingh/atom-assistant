@@ -76,6 +76,7 @@ class AtomNotificationCenter(context: Context) {
             .addAction(0, "Done", actionPendingIntent(reminderId, title, AlarmContract.ActionDone, 1))
             .addAction(0, "Snooze 10 min", actionPendingIntent(reminderId, title, AlarmContract.ActionSnooze, 2))
             .addAction(0, "Remind in 1 hour", actionPendingIntent(reminderId, title, AlarmContract.ActionRemindAgain, 3))
+            .addAction(0, "Ignore", actionPendingIntent(reminderId, title, AlarmContract.ActionIgnore, 4))
         if (AlarmPreferences(appContext).alarmModeEnabled) {
             builder.setFullScreenIntent(fullScreenIntent, true)
         }
@@ -116,6 +117,7 @@ class AtomNotificationCenter(context: Context) {
             .addAction(0, "Done", actionPendingIntent(reminderId, title, AlarmContract.ActionDone, 1))
             .addAction(0, "Snooze 10 min", actionPendingIntent(reminderId, title, AlarmContract.ActionSnooze, 2))
             .addAction(0, "Remind in 1 hour", actionPendingIntent(reminderId, title, AlarmContract.ActionRemindAgain, 3))
+            .addAction(0, "Ignore", actionPendingIntent(reminderId, title, AlarmContract.ActionIgnore, 4))
             .build()
         return postNotification(reminderId, notification)
     }

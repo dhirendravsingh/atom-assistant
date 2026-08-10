@@ -19,6 +19,7 @@ struct ReminderListView: View {
         List {
           scheduledSection
           unscheduledSection
+          missedSection
           completedSection
         }
         .listStyle(.insetGrouped)
@@ -59,6 +60,26 @@ struct ReminderListView: View {
     let values = reminders.filter { $0.state == "unscheduled" }
     if !values.isEmpty {
       Section("UNSCHEDULED") {
+        ForEach(values) { reminder in
+          ReminderRow(reminder: reminder)
+            .contentShape(Rectangle())
+            .onTapGesture { editingReminder = reminder }
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+              Button("Done") { complete(reminder) }.tint(.green)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+              Button("Delete", role: .destructive) { delete(reminder) }
+            }
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var missedSection: some View {
+    let values = reminders.filter { $0.state == "missed" }
+    if !values.isEmpty {
+      Section("MISSED") {
         ForEach(values) { reminder in
           ReminderRow(reminder: reminder)
             .contentShape(Rectangle())

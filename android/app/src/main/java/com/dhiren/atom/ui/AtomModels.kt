@@ -7,6 +7,7 @@ enum class AtomScreen {
     Today,
     Capture,
     Reminders,
+    Notifications,
     Settings,
 }
 

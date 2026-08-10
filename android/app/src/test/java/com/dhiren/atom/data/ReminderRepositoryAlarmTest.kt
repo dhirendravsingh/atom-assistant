@@ -158,6 +158,36 @@ class ReminderRepositoryAlarmTest {
         assertEquals(dueAt.toString(), dao.entities.value.single().scheduledAtUtc)
     }
 
+    @Test
+    fun `ignoring a one off reminder marks it missed and cancels its alarm`() = runBlocking {
+        val dao = FakeReminderDao(entity(id = 27L, scheduledAtUtc = "2026-08-01T12:00:00Z"))
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        repository.ignore(27L)
+
+        assertEquals("Missed", dao.entities.value.single().state)
+        assertEquals(listOf("cancel:27"), scheduler.events)
+    }
+
+    @Test
+    fun `ignoring a recurring occurrence preserves its next scheduled alarm`() = runBlocking {
+        val dao = FakeReminderDao(
+            entity(
+                id = 29L,
+                scheduledAtUtc = "2026-08-02T03:30:00Z",
+                recurrenceRule = "FREQ=DAILY",
+            ),
+        )
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        repository.ignore(29L)
+
+        assertEquals("Scheduled", dao.entities.value.single().state)
+        assertTrue(scheduler.events.isEmpty())
+    }
+
     private fun reminder(id: Long, date: String?, time: String?) = ReminderUi(
         id = id,
         title = "Review priorities",

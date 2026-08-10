@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -15,9 +16,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class OwnerProfileMigrationInstrumentedTest {
+class NotificationHistoryMigrationInstrumentedTest {
     private val context = ApplicationProvider.getApplicationContext<Context>()
-    private val databaseName = "owner-profile-migration-test"
+    private val databaseName = "notification-history-migration-test"
 
     @Before
     fun prepare() {
@@ -30,30 +31,37 @@ class OwnerProfileMigrationInstrumentedTest {
     }
 
     @Test
-    fun versionOneOwnerMigratesWithoutLosingProfileOrReminderData() = runBlocking {
-        createVersionOneDatabase()
+    fun versionTwoMigratesWithoutLosingRemindersAndStoresHistory() = runBlocking {
+        createVersionTwoDatabase()
 
         val migrated = Room.databaseBuilder(context, AtomDatabase::class.java, databaseName)
-            .addMigrations(Migration1To2, Migration2To3)
+            .addMigrations(Migration2To3)
             .allowMainThreadQueries()
             .build()
         try {
-            val owner = requireNotNull(migrated.ownerProfileDao().getOwner())
-            assertEquals("Dhiren", owner.displayName)
-            assertEquals("Man", owner.gender)
-            assertEquals("HeHim", owner.pronouns)
-            assertEquals("Keep this reminder", migrated.reminderDao().getById(1L)?.title)
+            assertEquals("Preserve me", migrated.reminderDao().getById(1L)?.title)
+            migrated.notificationHistoryDao().insert(
+                NotificationHistoryEntity(
+                    reminderId = 1L,
+                    title = "Preserve me",
+                    eventType = "Rang",
+                    detail = "Alarm rang",
+                    resultingScheduledAtUtc = null,
+                    occurredAtUtc = "2026-08-10T04:30:00Z",
+                ),
+            )
+            assertEquals(1, migrated.notificationHistoryDao().observeAll().first().size)
         } finally {
             migrated.close()
         }
     }
 
-    private fun createVersionOneDatabase() {
+    private fun createVersionTwoDatabase() {
         val helper = FrameworkSQLiteOpenHelperFactory().create(
             SupportSQLiteOpenHelper.Configuration.builder(context)
                 .name(databaseName)
                 .callback(
-                    object : SupportSQLiteOpenHelper.Callback(1) {
+                    object : SupportSQLiteOpenHelper.Callback(2) {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             db.execSQL(
                                 """
@@ -64,6 +72,8 @@ class OwnerProfileMigrationInstrumentedTest {
                                     locale TEXT NOT NULL,
                                     created_at_utc TEXT NOT NULL,
                                     updated_at_utc TEXT NOT NULL,
+                                    gender TEXT NOT NULL,
+                                    pronouns TEXT NOT NULL,
                                     PRIMARY KEY(id)
                                 )
                                 """.trimIndent(),
@@ -91,19 +101,11 @@ class OwnerProfileMigrationInstrumentedTest {
                             db.execSQL("CREATE INDEX IF NOT EXISTS index_reminders_state ON reminders(state)")
                             db.execSQL(
                                 """
-                                INSERT INTO owner_profile (
-                                    id, display_name, timezone, locale, created_at_utc, updated_at_utc
-                                ) VALUES (1, 'Dhiren Sir', 'Asia/Kolkata', 'en-IN',
-                                    '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')
-                                """.trimIndent(),
-                            )
-                            db.execSQL(
-                                """
                                 INSERT INTO reminders (
                                     id, title, source_text, scheduled_at_utc, local_date,
                                     local_time, timezone, recurrence_rule, source, state,
                                     accent, created_at_utc, updated_at_utc
-                                ) VALUES (1, 'Keep this reminder', 'Keep this reminder',
+                                ) VALUES (1, 'Preserve me', 'Preserve me',
                                     '2026-08-10T04:30:00Z', '2026-08-10', '10:00',
                                     'Asia/Kolkata', NULL, 'Text', 'Scheduled', 'Mint',
                                     '2026-08-01T00:00:00Z', '2026-08-01T00:00:00Z')
@@ -118,7 +120,7 @@ class OwnerProfileMigrationInstrumentedTest {
                         ) = Unit
                     },
                 )
-                .build(),
+                .build()
         )
         helper.writableDatabase
         helper.close()

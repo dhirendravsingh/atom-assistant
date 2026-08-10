@@ -11,7 +11,7 @@ to say.”
 ## Local-first data
 
 The Android Room database is the only data store in Phase 1. No profile or
-reminder data is sent to Railway or PostgreSQL. If the owner explicitly enables
+reminder or notification-history data is sent to Railway or PostgreSQL. If the owner explicitly enables
 the optional Phase 2 synchronization feature in the future, Railway PostgreSQL
 may receive the minimum structured profile and reminder data required for
 backup and recovery while Room remains the operational source of truth.
@@ -19,6 +19,11 @@ backup and recovery while Room remains the operational source of truth.
 Room writes `atom.db` inside Atom's private internal application storage. Atom
 does not request permission to read photos, shared files, media, or external
 storage.
+
+Alarm activity contains the reminder title, delivery/action status, timestamps,
+and an optional replacement schedule. Android stores it in Room and iOS stores
+it in SwiftData. It stays inside the respective app container and requires no
+additional permission.
 
 Voice is transcribed through Android's speech-recognition service. On Android
 12 and newer, Atom only enables voice when Android reports that the dedicated

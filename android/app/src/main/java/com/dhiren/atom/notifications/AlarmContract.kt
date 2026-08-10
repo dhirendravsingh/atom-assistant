@@ -8,6 +8,7 @@ object AlarmContract {
     const val ActionDone = "com.dhiren.atom.action.DONE_REMINDER"
     const val ActionSnooze = "com.dhiren.atom.action.SNOOZE_REMINDER"
     const val ActionRemindAgain = "com.dhiren.atom.action.REMIND_AGAIN"
+    const val ActionIgnore = "com.dhiren.atom.action.IGNORE_REMINDER"
     const val ActionDismissAlarmUi = "com.dhiren.atom.action.DISMISS_ALARM_UI"
     const val ActionOpenMissed = "com.dhiren.atom.action.OPEN_MISSED_REMINDER"
     const val ActionExactAlarmPermissionStateChanged =

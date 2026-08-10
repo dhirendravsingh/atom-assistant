@@ -10,11 +10,15 @@ struct AtomRootView: View {
   @AppStorage("atom.appearance") private var appearance = "system"
   @State private var selection = 0
   @State private var showPermissionSetup = false
+  @State private var showNotificationHistory = false
 
   var body: some View {
     TabView(selection: $selection) {
       NavigationStack {
-        CaptureView(onOpenReminders: { selection = 1 })
+        CaptureView(
+          onOpenReminders: { selection = 1 },
+          onOpenNotificationHistory: { showNotificationHistory = true }
+        )
       }
       .tabItem { Label("Capture", systemImage: "sparkles") }
       .tag(0)
@@ -35,15 +39,18 @@ struct AtomRootView: View {
     .preferredColorScheme(colorScheme)
     .task {
       await permissions.refresh()
-      applyNotificationActions()
+      await reconcileNotificationState()
       showPermissionSetup = permissionSetupVersion < 1 && !permissions.plan.isEmpty
     }
     .onChange(of: scenePhase) { _, phase in
       guard phase == .active else { return }
       Task {
         await permissions.refresh()
-        applyNotificationActions()
+        await reconcileNotificationState()
       }
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .atomNotificationHistoryDidChange)) { _ in
+      applyNotificationHistory()
     }
     .sheet(isPresented: $showPermissionSetup) {
       PermissionSetupView {
@@ -52,6 +59,9 @@ struct AtomRootView: View {
       }
       .environmentObject(permissions)
       .interactiveDismissDisabled(permissions.requesting)
+    }
+    .sheet(isPresented: $showNotificationHistory) {
+      NotificationHistoryView()
     }
   }
 
@@ -74,6 +84,8 @@ struct AtomRootView: View {
       switch action.kind {
       case .completed:
         reminder.state = "completed"
+      case .ignored:
+        reminder.state = "missed"
       case .rescheduled:
         reminder.state = "scheduled"
         reminder.scheduledAtUTC = action.scheduledAt
@@ -86,6 +98,34 @@ struct AtomRootView: View {
           reminder.localTime = timeFormatter.string(from: date)
         }
       }
+    }
+    try? modelContext.save()
+  }
+
+  private func reconcileNotificationState() async {
+    await NotificationScheduler.shared.synchronizeDeliveredHistory()
+    applyNotificationActions()
+    applyNotificationHistory()
+  }
+
+  private func applyNotificationHistory() {
+    let pendingEvents = NotificationScheduler.shared.drainHistoryEvents()
+    guard !pendingEvents.isEmpty else { return }
+    let existing = (try? modelContext.fetch(FetchDescriptor<NotificationHistoryRecord>())) ?? []
+    var existingIDs = Set(existing.map(\.id))
+    for event in pendingEvents where !existingIDs.contains(event.id) {
+      modelContext.insert(
+        NotificationHistoryRecord(
+          id: event.id,
+          reminderID: event.reminderID,
+          title: event.title,
+          eventType: event.kind,
+          detail: event.detail,
+          resultingScheduledAt: event.resultingScheduledAt,
+          occurredAt: event.occurredAt
+        )
+      )
+      existingIDs.insert(event.id)
     }
     try? modelContext.save()
   }

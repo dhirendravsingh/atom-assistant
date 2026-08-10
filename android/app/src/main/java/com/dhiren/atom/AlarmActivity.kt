@@ -15,6 +15,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.dhiren.atom.notifications.AlarmContract
 import com.dhiren.atom.notifications.AlarmRinger
+import com.dhiren.atom.data.NotificationHistoryEventType
+import java.time.Instant
 import com.dhiren.atom.ui.AtomAlarmScreen
 import com.dhiren.atom.ui.AtomTheme
 import java.time.Duration
@@ -76,6 +78,12 @@ class AlarmActivity : ComponentActivity() {
                         busy.value = true
                         finishWithAction {
                             application.reminderRepository.complete(reminderId)
+                            application.notificationHistoryRepository.record(
+                                reminderId,
+                                title,
+                                NotificationHistoryEventType.Completed,
+                                "Marked done",
+                            )
                         }
                     },
                     onSnooze = {
@@ -85,6 +93,13 @@ class AlarmActivity : ComponentActivity() {
                                 reminderId,
                                 Duration.ofMinutes(AlarmContract.DefaultSnoozeMinutes),
                             )
+                            application.notificationHistoryRepository.record(
+                                reminderId,
+                                title,
+                                NotificationHistoryEventType.Snoozed,
+                                "Snoozed for 10 minutes",
+                                Instant.now().plusSeconds(AlarmContract.DefaultSnoozeMinutes * 60),
+                            )
                         }
                     },
                     onRemindAgain = {
@@ -93,6 +108,25 @@ class AlarmActivity : ComponentActivity() {
                             application.reminderRepository.remindAgain(
                                 reminderId,
                                 Duration.ofMinutes(AlarmContract.DefaultRemindAgainMinutes),
+                            )
+                            application.notificationHistoryRepository.record(
+                                reminderId,
+                                title,
+                                NotificationHistoryEventType.RemindedAgain,
+                                "Asked Atom to remind again in 1 hour",
+                                Instant.now().plusSeconds(AlarmContract.DefaultRemindAgainMinutes * 60),
+                            )
+                        }
+                    },
+                    onIgnore = {
+                        busy.value = true
+                        finishWithAction {
+                            application.reminderRepository.ignore(reminderId)
+                            application.notificationHistoryRepository.record(
+                                reminderId,
+                                title,
+                                NotificationHistoryEventType.Ignored,
+                                "Ignored",
                             )
                         }
                     },

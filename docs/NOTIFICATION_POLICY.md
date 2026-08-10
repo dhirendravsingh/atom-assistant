@@ -74,10 +74,19 @@ troubleshooting link for unusually aggressive device-manufacturer behavior.
 ## Delivery actions
 
 Every scheduled notification and the real full-screen Alarm Mode offer Done,
-Snooze 10 minutes, and Remind in 1 hour. One-off reminders become completed
+Snooze 10 minutes, Remind in 1 hour, and Ignore. One-off reminders become completed
 when Done is selected. For recurring reminders, delivery has already advanced
 the stored next occurrence, so Done dismisses only the ringing occurrence.
 Actions write their state locally before any future network sync.
+
+Atom keeps a private on-device alarm activity history. It records when an alarm
+rings and appends each later status change, including snoozed, reminded again,
+completed, missed, opened, or ignored. The notification bell opens this history
+with the newest event first and marks displayed entries as read. Android records
+the alarm receiver directly. iOS records foreground deliveries immediately and
+reconciles notifications still present in Notification Center when the app
+becomes active, because iOS does not expose a universal background callback for
+the instant a notification is displayed.
 
 Android cannot guarantee a ring after the owner force-stops the app, revokes
 permission, powers off the device, or applies aggressive vendor battery

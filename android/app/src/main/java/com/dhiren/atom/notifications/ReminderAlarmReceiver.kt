@@ -22,6 +22,12 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 if (delivered) {
+                    application.notificationHistoryRepository.record(
+                        reminderId = reminderId,
+                        title = title,
+                        eventType = com.dhiren.atom.data.NotificationHistoryEventType.Rang,
+                        detail = "Alarm rang",
+                    )
                     application.reminderRepository.advanceRecurringAfterDelivery(reminderId)
                 } else {
                     application.deviceReliabilityManager.reconcile(AlarmReconciliationReason.DeliveryRecovery)

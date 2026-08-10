@@ -26,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -46,6 +47,7 @@ fun AtomAlarmScreen(
     onDone: () -> Unit,
     onSnooze: () -> Unit,
     onRemindAgain: () -> Unit,
+    onIgnore: () -> Unit,
     onClose: (() -> Unit)? = null,
 ) {
     val colors = LocalAtomPalette.current
@@ -116,6 +118,13 @@ fun AtomAlarmScreen(
                         Spacer(Modifier.size(7.dp))
                         Text("1 hour")
                     }
+                }
+                Spacer(Modifier.height(10.dp))
+                TextButton(
+                    onClick = onIgnore,
+                    enabled = !busy,
+                ) {
+                    Text("Ignore this alarm", color = colors.quickCardText.copy(alpha = .7f))
                 }
             }
         }

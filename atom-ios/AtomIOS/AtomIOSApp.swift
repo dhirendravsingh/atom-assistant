@@ -14,6 +14,6 @@ struct AtomIOSApp: App {
       AtomRootView()
         .environmentObject(permissions)
     }
-    .modelContainer(for: ReminderRecord.self)
+    .modelContainer(for: [ReminderRecord.self, NotificationHistoryRecord.self])
   }
 }

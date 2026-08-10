@@ -14,8 +14,11 @@ struct CaptureView: View {
   @State private var errorMessage: String?
   @State private var savedMessage: String?
   @State private var source: ReminderSource = .text
+  @Query(sort: \NotificationHistoryRecord.occurredAt, order: .reverse)
+  private var notificationHistory: [NotificationHistoryRecord]
 
   let onOpenReminders: () -> Void
+  let onOpenNotificationHistory: () -> Void
 
   var body: some View {
     ScrollView {
@@ -23,6 +26,22 @@ struct CaptureView: View {
         HStack {
           AtomMark(compact: true)
           Spacer()
+          Button(action: onOpenNotificationHistory) {
+            ZStack(alignment: .topTrailing) {
+              Image(systemName: "bell")
+                .font(.headline)
+                .frame(width: 38, height: 38)
+                .background(.primary.opacity(0.06), in: Circle())
+              if notificationHistory.contains(where: { !$0.isRead }) {
+                Circle()
+                  .fill(AtomColors.coral)
+                  .frame(width: 8, height: 8)
+                  .overlay(Circle().stroke(AtomColors.canvas, lineWidth: 2))
+              }
+            }
+          }
+          .buttonStyle(.plain)
+          .accessibilityLabel("Notification history")
           Text(Date.now.formatted(date: .abbreviated, time: .omitted))
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
