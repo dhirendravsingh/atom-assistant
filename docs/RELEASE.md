@@ -35,6 +35,6 @@ Release signing deliberately disables Gradle's configuration cache so signing
 credentials are not serialized into build cache state.
 
 Verify the APK signature with Android SDK `apksigner verify --verbose
---print-certs app/build/outputs/apk/release/atom-android-release.apk`. Installation and
+--print-certs app/build/outputs/apk/release/atom.v3.apk`. Installation and
 real-device instrumentation tests require a USB-debugging-authorized Android
 phone or emulator.

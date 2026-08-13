@@ -768,7 +768,7 @@ textarea {
 .header-actions {
   align-items: center;
   display: flex;
-  gap: 9px;
+  gap: 13px;
 }
 
 .brand-mark-button {
@@ -807,6 +807,11 @@ textarea {
   right: 1px;
   top: 1px;
   width: 8px;
+}
+
+.icon-button.active-search {
+  background: var(--ink);
+  color: var(--white);
 }
 
 .welcome-copy {
@@ -1706,11 +1711,53 @@ textarea {
 }
 
 .reminders-header h2,
-.settings-header h2 {
+.settings-header h2,
+.notification-screen-header h2 {
   font-size: 34px;
   font-weight: 600;
   letter-spacing: -0.055em;
   margin: 7px 0 0;
+}
+
+.reminder-search-popover {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--soft-shadow);
+  display: flex;
+  gap: 9px;
+  margin: 14px 0 2px;
+  padding: 7px 8px 7px 13px;
+  position: relative;
+  z-index: 8;
+}
+
+.reminder-search-popover > svg {
+  color: var(--muted);
+  flex: 0 0 auto;
+}
+
+.reminder-search-popover input {
+  background: transparent;
+  border: 0;
+  flex: 1;
+  font-size: 11px;
+  min-width: 0;
+  outline: 0;
+  padding: 6px 0;
+}
+
+.reminder-search-popover button {
+  align-items: center;
+  background: var(--paper);
+  border: 0;
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  height: 30px;
+  justify-content: center;
+  width: 30px;
 }
 
 .filter-row {
@@ -1754,6 +1801,134 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 9px;
+}
+
+.notifications-screen {
+  padding-bottom: 40px;
+}
+
+.notification-screen-header {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.notification-screen-header h2 {
+  margin-top: 5px;
+}
+
+.notification-intro {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 17px 2px 14px;
+}
+
+.notification-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.notification-history-card {
+  align-items: flex-start;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ink);
+  display: flex;
+  gap: 11px;
+  padding: 14px;
+  text-align: left;
+  transition:
+    border-color 180ms ease,
+    transform 180ms ease;
+  width: 100%;
+}
+
+.notification-history-card:hover {
+  border-color: rgba(94, 185, 150, 0.46);
+  transform: translateY(-1px);
+}
+
+.notification-history-card.outcome-ignored {
+  background: var(--coral-pale);
+  border-color: rgba(235, 107, 79, 0.42);
+}
+
+.notification-history-icon {
+  align-items: center;
+  background: var(--paper);
+  border-radius: 50%;
+  color: var(--ink);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 38px;
+  justify-content: center;
+  width: 38px;
+}
+
+.outcome-ignored .notification-history-icon,
+.notification-history-icon.outcome-ignored {
+  background: rgba(235, 107, 79, 0.18);
+  color: var(--coral);
+}
+
+.outcome-completed .notification-history-icon,
+.notification-history-icon.outcome-completed {
+  background: var(--mint-pale);
+  color: var(--mint-dark);
+}
+
+.notification-history-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.notification-history-copy > span {
+  align-items: flex-start;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.notification-history-copy strong {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.notification-history-copy em {
+  color: var(--mint-dark);
+  flex: 0 0 auto;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 720;
+  text-transform: uppercase;
+}
+
+.outcome-ignored .notification-history-copy em {
+  color: var(--coral);
+}
+
+.notification-history-copy small {
+  color: var(--muted);
+  font-size: 8.5px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.notification-history-copy time {
+  color: var(--muted);
+  font-size: 7.5px;
+  margin-top: 7px;
+}
+
+.notification-history-card > svg {
+  align-self: center;
+  color: var(--muted);
+  flex: 0 0 auto;
 }
 
 .empty-state {
@@ -2216,6 +2391,112 @@ textarea {
   padding: 0;
   position: absolute;
   width: 100%;
+}
+
+.notification-detail-layer {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: 22px;
+}
+
+.notification-detail-card {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 25px;
+  box-shadow: var(--shadow);
+  max-width: 340px;
+  padding: 20px;
+  position: relative;
+  width: 100%;
+}
+
+.notification-detail-heading {
+  align-items: flex-start;
+  display: flex;
+  gap: 11px;
+}
+
+.notification-detail-heading > div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.notification-detail-heading small {
+  color: var(--coral);
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.notification-detail-heading h3 {
+  font-size: 17px;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  margin: 4px 0 0;
+}
+
+.notification-detail-heading > button {
+  align-items: center;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--muted);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
+.notification-detail-card > p {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+  margin: 16px 0;
+}
+
+.notification-detail-card dl {
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 17px;
+  margin: 0;
+  overflow: hidden;
+}
+
+.notification-detail-card dl > div {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 12px;
+}
+
+.notification-detail-card dl > div:last-child {
+  border-bottom: 0;
+}
+
+.notification-detail-card dt {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.notification-detail-card dd {
+  font-size: 9px;
+  font-weight: 650;
+  margin: 0;
+  text-align: right;
+}
+
+.notification-detail-card .next-alarm-detail {
+  background: var(--mint-pale);
+}
+
+.notification-detail-card .next-alarm-detail dd {
+  color: var(--mint-dark);
 }
 
 .bottom-sheet {
@@ -3069,6 +3350,17 @@ textarea {
 .theme-dark .snooze-panel > div > button,
 .theme-dark .snooze-panel section button {
   background: #232a24;
+}
+
+.theme-dark .reminder-search-popover,
+.theme-dark .notification-history-card:not(.outcome-ignored),
+.theme-dark .notification-detail-heading > button,
+.theme-dark .notification-detail-card dl {
+  background: #232a24;
+}
+
+.theme-dark .notification-history-card.outcome-ignored {
+  background: var(--coral-pale);
 }
 
 .theme-dark .logo-sheet-heading > button {

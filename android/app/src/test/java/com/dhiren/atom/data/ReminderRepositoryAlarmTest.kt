@@ -128,6 +128,48 @@ class ReminderRepositoryAlarmTest {
     }
 
     @Test
+    fun `delivered hourly recurrence persists and schedules its next occurrence`() = runBlocking {
+        val dao = FakeReminderDao(
+            entity(
+                id = 22L,
+                scheduledAtUtc = "2026-08-01T12:00:00Z",
+                localTime = "17:30",
+                recurrenceRule = "FREQ=HOURLY;INTERVAL=2",
+            ),
+        )
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        repository.advanceRecurringAfterDelivery(22L)
+
+        val saved = dao.entities.value.single()
+        assertEquals("FREQ=HOURLY;INTERVAL=2", saved.recurrenceRule)
+        assertEquals("2026-08-01T14:00:00Z", saved.scheduledAtUtc)
+        assertEquals("19:30", saved.localTime)
+        assertEquals(listOf("schedule:22:2026-08-01T14:00:00Z"), scheduler.events)
+    }
+
+    @Test
+    fun `missed hourly recurrence skips to the next cadence alarm`() = runBlocking {
+        val dao = FakeReminderDao(
+            entity(
+                id = 24L,
+                scheduledAtUtc = "2026-08-01T09:00:00Z",
+                localTime = "14:30",
+                recurrenceRule = "FREQ=HOURLY;INTERVAL=2",
+            ),
+        )
+        val scheduler = RecordingScheduler()
+        val repository = ReminderRepository(dao, clock, { timezone }, scheduler)
+
+        val result = repository.reconcileAlarms(AlarmReconciliationReason.Boot)
+
+        assertTrue(result.missedOccurrences.single().recurring)
+        assertEquals("2026-08-01T13:00:00Z", dao.entities.value.single().scheduledAtUtc)
+        assertEquals(listOf("cancel:24", "schedule:24:2026-08-01T13:00:00Z"), scheduler.events)
+    }
+
+    @Test
     fun `clock changes recalculate a future recurring occurrence from local time`() = runBlocking {
         val dao = FakeReminderDao(
             entity(

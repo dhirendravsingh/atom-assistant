@@ -29,6 +29,7 @@ import com.dhiren.atom.notifications.AlarmReconciliationReason
 import com.dhiren.atom.permissions.InitialPermissionOnboardingPreferences
 import com.dhiren.atom.permissions.InitialPermissionStep
 import com.dhiren.atom.permissions.initialPermissionPlan
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -138,6 +139,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -148,6 +151,7 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -164,6 +168,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.time.Instant
 import java.time.LocalDateTime
 import java.time.LocalDate
 import java.time.LocalTime
@@ -199,6 +204,8 @@ fun AtomApp() {
     var showLogoGallery by rememberSaveable { mutableStateOf(false) }
     var showAlarmPreview by rememberSaveable { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<ReminderUi?>(null) }
+    var captureReturnScreen by rememberSaveable { mutableStateOf(AtomScreen.Today) }
+    var startCaptureWithVoice by rememberSaveable { mutableStateOf(false) }
     var pendingNotificationSave by remember { mutableStateOf<ReminderUi?>(null) }
     val permissionOnboardingPreferences = remember(context) {
         InitialPermissionOnboardingPreferences(context)
@@ -216,6 +223,7 @@ fun AtomApp() {
             reminderRepository.save(reminder)
         }
         editingReminder = null
+        startCaptureWithVoice = false
         currentScreen = AtomScreen.Reminders
     }
 
@@ -316,6 +324,16 @@ fun AtomApp() {
         }
     }
 
+    BackHandler(enabled = currentScreen != AtomScreen.Today) {
+        currentScreen = if (currentScreen == AtomScreen.Capture) {
+            editingReminder = null
+            startCaptureWithVoice = false
+            captureReturnScreen
+        } else {
+            AtomScreen.Today
+        }
+    }
+
     AtomTheme(darkTheme = darkTheme) {
         val colors = LocalAtomPalette.current
         val view = LocalView.current
@@ -338,7 +356,9 @@ fun AtomApp() {
                             selected = currentScreen,
                             onSelect = { currentScreen = it },
                             onAdd = {
+                                captureReturnScreen = currentScreen
                                 editingReminder = null
+                                startCaptureWithVoice = false
                                 currentScreen = AtomScreen.Capture
                             },
                         )
@@ -365,20 +385,35 @@ fun AtomApp() {
                                 onToggleTheme = { darkTheme = !darkTheme },
                                 onLogoClick = { showLogoGallery = true },
                                 onCapture = {
+                                    captureReturnScreen = AtomScreen.Today
                                     editingReminder = null
+                                    startCaptureWithVoice = false
+                                    currentScreen = AtomScreen.Capture
+                                },
+                                onVoiceCapture = {
+                                    captureReturnScreen = AtomScreen.Today
+                                    editingReminder = null
+                                    startCaptureWithVoice = true
                                     currentScreen = AtomScreen.Capture
                                 },
                                 onOpenNotifications = { currentScreen = AtomScreen.Notifications },
                                 onSeeAll = { currentScreen = AtomScreen.Reminders },
                                 onEdit = {
+                                    captureReturnScreen = AtomScreen.Today
                                     editingReminder = it
+                                    startCaptureWithVoice = false
                                     currentScreen = AtomScreen.Capture
                                 },
                             )
 
                             AtomScreen.Capture -> CaptureScreen(
                                 reminder = editingReminder,
-                                onBack = { currentScreen = AtomScreen.Today },
+                                autoStartVoice = startCaptureWithVoice,
+                                onBack = {
+                                    editingReminder = null
+                                    startCaptureWithVoice = false
+                                    currentScreen = captureReturnScreen
+                                },
                                 onSave = { draft ->
                                     if (
                                         Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -395,7 +430,9 @@ fun AtomApp() {
                             AtomScreen.Reminders -> RemindersScreen(
                                 reminders = reminders,
                                 onEdit = {
+                                    captureReturnScreen = AtomScreen.Reminders
                                     editingReminder = it
+                                    startCaptureWithVoice = false
                                     currentScreen = AtomScreen.Capture
                                 },
                                 onDelete = {
@@ -404,7 +441,9 @@ fun AtomApp() {
                                     }
                                 },
                                 onAdd = {
+                                    captureReturnScreen = AtomScreen.Reminders
                                     editingReminder = null
+                                    startCaptureWithVoice = false
                                     currentScreen = AtomScreen.Capture
                                 },
                             )
@@ -585,6 +624,7 @@ private fun HomeScreen(
     onToggleTheme: () -> Unit,
     onLogoClick: () -> Unit,
     onCapture: () -> Unit,
+    onVoiceCapture: () -> Unit,
     onOpenNotifications: () -> Unit,
     onSeeAll: () -> Unit,
     onEdit: (ReminderUi) -> Unit,
@@ -613,7 +653,7 @@ private fun HomeScreen(
                 scheduledCount = reminders.count { it.state == ReminderState.Scheduled },
             )
             Spacer(Modifier.height(18.dp))
-            QuickCaptureCard(onCapture = onCapture)
+            QuickCaptureCard(onCapture = onCapture, onVoiceCapture = onVoiceCapture)
             Spacer(Modifier.height(28.dp))
             SectionHeading(
                 eyebrow = "COMING UP",
@@ -671,7 +711,7 @@ private fun AppHeader(
             description = if (darkTheme) "Use light mode" else "Use dark mode",
             onClick = onToggleTheme,
         )
-        Spacer(Modifier.width(6.dp))
+        Spacer(Modifier.width(11.dp))
         Box {
             HeaderIcon(
                 icon = Icons.Rounded.NotificationsNone,
@@ -689,7 +729,7 @@ private fun AppHeader(
                 )
             }
         }
-        Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(11.dp))
         Box(
             modifier = Modifier
                 .size(38.dp)
@@ -810,7 +850,10 @@ private fun AtomDoodle(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun QuickCaptureCard(onCapture: () -> Unit) {
+private fun QuickCaptureCard(
+    onCapture: () -> Unit,
+    onVoiceCapture: () -> Unit,
+) {
     val colors = LocalAtomPalette.current
     var text by rememberSaveable { mutableStateOf("") }
     var focused by remember { mutableStateOf(false) }
@@ -881,7 +924,7 @@ private fun QuickCaptureCard(onCapture: () -> Unit) {
                     },
                 )
                 FilledIconButton(
-                    onClick = onCapture,
+                    onClick = onVoiceCapture,
                     modifier = Modifier.size(52.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
                         containerColor = colors.mint,
@@ -1131,6 +1174,7 @@ private fun Context.openBatteryOptimizationSettings() {
 @Composable
 private fun CaptureScreen(
     reminder: ReminderUi?,
+    autoStartVoice: Boolean,
     onBack: () -> Unit,
     onSave: (ReminderUi) -> Unit,
 ) {
@@ -1199,6 +1243,12 @@ private fun CaptureScreen(
                 speechRecognizer.start(SpeechInputTarget.Command)
             }
             else -> microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    LaunchedEffect(autoStartVoice, reminder?.id) {
+        if (autoStartVoice && reminder == null) {
+            beginCommandSpeech()
         }
     }
 
@@ -1361,7 +1411,7 @@ private fun CaptureScreen(
                     SuggestionChip(sample) {
                         command = when (sample) {
                             "In 20 minutes" -> "Remind me in 20 minutes to check the oven"
-                            "Tomorrow" -> "Please remind me to call Rhea tomorrow"
+                            "Tomorrow" -> "Please remind me to water the plants tomorrow"
                             "Every weekday" -> "Every weekday at 9 AM remind me to review my priorities"
                             else -> "Hey Atom, remind me to submit the report tomorrow at 12:00 AM"
                         }
@@ -1784,8 +1834,19 @@ private fun RemindersScreen(
 ) {
     val colors = LocalAtomPalette.current
     var filter by rememberSaveable { mutableStateOf("All") }
+    var searchVisible by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchFocusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(searchVisible) {
+        if (searchVisible) {
+            searchFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+    val normalizedSearch = searchQuery.trim()
     val visible = reminders.filter {
-        when (filter) {
+        val matchesFilter = when (filter) {
             "Scheduled" -> it.state == ReminderState.Scheduled
             "Needs details" -> it.state in setOf(ReminderState.NeedsDate, ReminderState.NeedsTime, ReminderState.Unscheduled)
             "Repeats" -> it.recurrence != null
@@ -1793,6 +1854,14 @@ private fun RemindersScreen(
             "Completed" -> it.state == ReminderState.Completed
             else -> true
         }
+        val matchesSearch = normalizedSearch.isEmpty() || listOfNotNull(
+            it.title,
+            it.sourceText,
+            it.date,
+            it.time,
+            it.recurrence,
+        ).any { value -> value.contains(normalizedSearch, ignoreCase = true) }
+        matchesFilter && matchesSearch
     }
     ScreenFrame {
         Column(
@@ -1807,7 +1876,55 @@ private fun RemindersScreen(
                         Text("Everything on your radar", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
                     }
                     Spacer(Modifier.weight(1f))
-                    HeaderIcon(Icons.Rounded.Search, "Search reminders") {}
+                    HeaderIcon(Icons.Rounded.Search, "Search reminders") {
+                        searchVisible = !searchVisible
+                        if (!searchVisible) {
+                            searchQuery = ""
+                            keyboardController?.hide()
+                        }
+                    }
+                }
+                if (searchVisible) {
+                    Spacer(Modifier.height(13.dp))
+                    Surface(
+                        color = colors.surface,
+                        shape = RoundedCornerShape(17.dp),
+                        shadowElevation = 7.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, colors.line, RoundedCornerShape(17.dp)),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Rounded.Search, null, tint = colors.muted, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(9.dp))
+                            BasicTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium.copy(color = colors.ink),
+                                modifier = Modifier.weight(1f).focusRequester(searchFocusRequester),
+                                decorationBox = { inner ->
+                                    if (searchQuery.isEmpty()) {
+                                        Text("Search reminder words…", color = colors.muted, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    inner()
+                                },
+                            )
+                            IconButton(
+                                onClick = {
+                                    searchQuery = ""
+                                    searchVisible = false
+                                    keyboardController?.hide()
+                                },
+                                modifier = Modifier.size(32.dp),
+                            ) {
+                                Icon(Icons.Rounded.Close, "Close search", tint = colors.muted, modifier = Modifier.size(17.dp))
+                            }
+                        }
+                    }
                 }
                 Spacer(Modifier.height(19.dp))
                 Row(
@@ -1826,7 +1943,13 @@ private fun RemindersScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 if (visible.isEmpty()) {
-                    item { EmptyReminders(onAdd) }
+                    item {
+                        if (normalizedSearch.isEmpty()) {
+                            EmptyReminders(onAdd)
+                        } else {
+                            SearchEmptyState(normalizedSearch)
+                        }
+                    }
                 }
                 items(visible, key = { it.id }) { reminder ->
                     ReminderCard(reminder, onEdit = { onEdit(reminder) }, onDelete = { onDelete(reminder) })
@@ -1834,6 +1957,22 @@ private fun RemindersScreen(
                 item { Spacer(Modifier.height(20.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun SearchEmptyState(query: String) {
+    val colors = LocalAtomPalette.current
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 70.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(64.dp).clip(CircleShape).background(colors.paper), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.Search, null, tint = colors.muted, modifier = Modifier.size(28.dp))
+        }
+        Spacer(Modifier.height(14.dp))
+        Text("No reminder found", color = colors.ink, style = MaterialTheme.typography.titleMedium)
+        Text("Nothing matches “$query”.", color = colors.muted, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
@@ -1940,6 +2079,7 @@ private fun NotificationHistoryScreen(
     onBack: () -> Unit,
 ) {
     val colors = LocalAtomPalette.current
+    var selectedEvent by remember { mutableStateOf<NotificationHistoryUi?>(null) }
     ScreenFrame {
         Column(
             modifier = Modifier
@@ -1999,17 +2139,35 @@ private fun NotificationHistoryScreen(
                     verticalArrangement = Arrangement.spacedBy(11.dp),
                 ) {
                     items(events, key = { it.id }) { event ->
-                        NotificationHistoryCard(event)
+                        NotificationHistoryCard(event) { selectedEvent = event }
                     }
                     item { Spacer(Modifier.height(24.dp)) }
                 }
             }
         }
     }
+    selectedEvent?.let { event ->
+        val relatedRing = events
+            .asSequence()
+            .filter {
+                it.reminderId == event.reminderId &&
+                    it.eventType == NotificationHistoryEventType.Rang &&
+                    !it.occurredAt.isAfter(event.occurredAt)
+            }
+            .maxByOrNull { it.occurredAt }
+        NotificationHistoryDetailDialog(
+            event = event,
+            relatedRing = relatedRing,
+            onDismiss = { selectedEvent = null },
+        )
+    }
 }
 
 @Composable
-private fun NotificationHistoryCard(event: NotificationHistoryUi) {
+private fun NotificationHistoryCard(
+    event: NotificationHistoryUi,
+    onClick: () -> Unit,
+) {
     val colors = LocalAtomPalette.current
     val locale = LocalConfiguration.current.locales[0]
     val timestampFormatter = remember(locale) {
@@ -2031,10 +2189,18 @@ private fun NotificationHistoryCard(event: NotificationHistoryUi) {
         -> colors.coral
         else -> colors.ink
     }
+    val isIgnored = event.eventType == NotificationHistoryEventType.Ignored
     Surface(
-        color = colors.surface,
+        color = if (isIgnored) colors.coralPale else colors.surface,
         shape = RoundedCornerShape(22.dp),
-        modifier = Modifier.fillMaxWidth().border(1.dp, colors.line, RoundedCornerShape(22.dp)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                1.dp,
+                if (isIgnored) colors.coral.copy(alpha = .42f) else colors.line,
+                RoundedCornerShape(22.dp),
+            )
+            .clickable(onClick = onClick),
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.Top) {
             Box(
@@ -2063,14 +2229,140 @@ private fun NotificationHistoryCard(event: NotificationHistoryUi) {
                 )
                 event.resultingScheduledAt?.let { next ->
                     Spacer(Modifier.height(3.dp))
+                    val scheduleLabel = if (
+                        event.eventType == NotificationHistoryEventType.Rang ||
+                        event.eventType == NotificationHistoryEventType.Missed
+                    ) {
+                        "Scheduled"
+                    } else {
+                        "Next"
+                    }
                     Text(
-                        "Next: ${next.atZone(ZoneId.systemDefault()).format(timestampFormatter)}",
+                        "$scheduleLabel: ${next.atZone(ZoneId.systemDefault()).format(timestampFormatter)}",
                         color = colors.mintDark,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NotificationHistoryDetailDialog(
+    event: NotificationHistoryUi,
+    relatedRing: NotificationHistoryUi?,
+    onDismiss: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    val locale = LocalConfiguration.current.locales[0]
+    val formatter = remember(locale) { DateTimeFormatter.ofPattern("MMM d · h:mm a", locale) }
+    val status = when (event.eventType) {
+        NotificationHistoryEventType.Rang -> "Rang"
+        NotificationHistoryEventType.Missed -> "Missed"
+        NotificationHistoryEventType.Opened -> "Opened"
+        NotificationHistoryEventType.Snoozed -> "Snoozed"
+        NotificationHistoryEventType.RemindedAgain -> "Remind again"
+        NotificationHistoryEventType.Completed -> "Completed"
+        NotificationHistoryEventType.Ignored -> "Ignored"
+    }
+    val statusTint = when (event.eventType) {
+        NotificationHistoryEventType.Completed -> colors.mintDark
+        NotificationHistoryEventType.Ignored,
+        NotificationHistoryEventType.Missed,
+        -> colors.coral
+        else -> colors.ink
+    }
+    val ring = relatedRing ?: event.takeIf { it.eventType == NotificationHistoryEventType.Rang }
+    val scheduledFor = ring?.resultingScheduledAt
+        ?: event.takeIf {
+            it.eventType == NotificationHistoryEventType.Rang ||
+                it.eventType == NotificationHistoryEventType.Missed
+        }?.resultingScheduledAt
+        ?: ring?.occurredAt
+    val rangAt = ring?.occurredAt
+        ?: event.takeIf { it.eventType == NotificationHistoryEventType.Missed }?.occurredAt
+    fun Instant.display(): String = atZone(ZoneId.systemDefault()).format(formatter)
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            color = colors.elevated,
+            shape = RoundedCornerShape(28.dp),
+            shadowElevation = 18.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Box(
+                        modifier = Modifier.size(42.dp).clip(CircleShape).background(statusTint.copy(alpha = .13f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            when (event.eventType) {
+                                NotificationHistoryEventType.Completed -> Icons.Rounded.CheckCircle
+                                NotificationHistoryEventType.Ignored -> Icons.Rounded.Close
+                                NotificationHistoryEventType.Snoozed -> Icons.Rounded.Snooze
+                                NotificationHistoryEventType.RemindedAgain -> Icons.Rounded.Repeat
+                                else -> Icons.Rounded.NotificationsActive
+                            },
+                            contentDescription = null,
+                            tint = statusTint,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(status.uppercase(locale), color = statusTint, style = MaterialTheme.typography.labelMedium, letterSpacing = .8.sp)
+                        Spacer(Modifier.height(3.dp))
+                        Text(event.title, color = colors.ink, style = MaterialTheme.typography.titleLarge)
+                    }
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Rounded.Close, "Close notification details", tint = colors.muted, modifier = Modifier.size(19.dp))
+                    }
+                }
+                event.detail?.let {
+                    Spacer(Modifier.height(15.dp))
+                    Text(it, color = colors.muted, style = MaterialTheme.typography.bodyMedium)
+                }
+                Spacer(Modifier.height(17.dp))
+                Surface(color = colors.paper, shape = RoundedCornerShape(19.dp), modifier = Modifier.fillMaxWidth()) {
+                    Column {
+                        NotificationDetailRow("Reminder set for", scheduledFor?.display() ?: "Not available")
+                        HorizontalDivider(color = colors.line)
+                        NotificationDetailRow("Alarm rang", rangAt?.display() ?: "Not recorded")
+                        HorizontalDivider(color = colors.line)
+                        NotificationDetailRow("Action recorded", event.occurredAt.display())
+                        event.resultingScheduledAt
+                            ?.takeIf { event.eventType != NotificationHistoryEventType.Rang }
+                            ?.let { next ->
+                                HorizontalDivider(color = colors.line)
+                                NotificationDetailRow("Next reminder", next.display(), emphasize = true)
+                            }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationDetailRow(
+    label: String,
+    value: String,
+    emphasize: Boolean = false,
+) {
+    val colors = LocalAtomPalette.current
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, color = colors.muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            color = if (emphasize) colors.mintDark else colors.ink,
+            style = MaterialTheme.typography.labelMedium,
+            textAlign = TextAlign.End,
+        )
     }
 }
 
@@ -2137,7 +2429,7 @@ private fun SettingsScreen(
             Text("Make Atom yours", color = colors.ink, style = MaterialTheme.typography.headlineMedium)
             Spacer(Modifier.height(22.dp))
             Surface(
-                color = colors.ink,
+                color = colors.quickCard,
                 shape = RoundedCornerShape(26.dp),
                 modifier = Modifier.fillMaxWidth().clickable { showProfileEditor = true },
             ) {

@@ -84,22 +84,34 @@ class AtomCommandParser(
 
         val explicitDate = relative?.value?.toLocalDate() ?: distinctDates.singleOrNull()?.value
         val explicitTime = relative?.value?.toLocalTime() ?: timeResult.times.singleOrNull()?.value
-        val finalDate = when {
+        val finalRecurrenceRule = when (recurrence) {
+            RecurrenceUpdate.Clear -> null
+            is RecurrenceUpdate.Set -> recurrence.rule
+            RecurrenceUpdate.Unchanged -> context?.recurrenceRule
+        }
+        val intervalHours = finalRecurrenceRule.hourlyIntervalHours()
+        val intervalFirstOccurrence = if (recurrence is RecurrenceUpdate.Set && intervalHours != null) {
+            val localNow = now.atZone(timezone)
+            if (explicitTime != null) {
+                val todayAtTime = ZonedDateTime.of(today, explicitTime, timezone)
+                if (todayAtTime.isAfter(localNow)) todayAtTime else todayAtTime.plusDays(1)
+            } else {
+                localNow.plusHours(intervalHours.toLong()).withSecond(0).withNano(0)
+            }
+        } else {
+            null
+        }
+        val finalDate = intervalFirstOccurrence?.toLocalDate() ?: when {
             relative != null -> explicitDate
             dateWasSpecified -> explicitDate
             context != null -> context.localDate
             else -> null
         }
-        val finalTime = when {
+        val finalTime = intervalFirstOccurrence?.toLocalTime() ?: when {
             relative != null -> explicitTime
             timeWasSpecified -> explicitTime
             context != null -> context.localTime
             else -> null
-        }
-        val finalRecurrenceRule = when (recurrence) {
-            RecurrenceUpdate.Clear -> null
-            is RecurrenceUpdate.Set -> recurrence.rule
-            RecurrenceUpdate.Unchanged -> context?.recurrenceRule
         }
         val finalRecurrenceLabel = recurrenceLabel(finalRecurrenceRule)
 
@@ -111,7 +123,7 @@ class AtomCommandParser(
             CommandIntent.Create -> {
                 if (task.isNullOrBlank()) missing += MissingField.Task
                 if (finalRecurrenceRule != null) {
-                    if (finalTime == null) missing += MissingField.Time
+                    if (intervalHours == null && finalTime == null) missing += MissingField.Time
                 } else {
                     if (finalDate == null) missing += MissingField.Date
                     if (finalTime == null) missing += MissingField.Time
@@ -121,7 +133,7 @@ class AtomCommandParser(
             CommandIntent.Reschedule -> {
                 if (!scheduleWasSpecified) conflicts += "Say the new date, time, or recurrence."
                 if (finalRecurrenceRule != null) {
-                    if (finalTime == null) missing += MissingField.Time
+                    if (intervalHours == null && finalTime == null) missing += MissingField.Time
                 } else {
                     if (finalDate == null) missing += MissingField.Date
                     if (finalTime == null) missing += MissingField.Time
@@ -143,7 +155,9 @@ class AtomCommandParser(
                 if (recurrence is RecurrenceUpdate.Unchanged) {
                     conflicts += "Say how this reminder should repeat, or say stop repeating."
                 }
-                if (recurrence is RecurrenceUpdate.Set && finalTime == null) missing += MissingField.Time
+                if (recurrence is RecurrenceUpdate.Set && intervalHours == null && finalTime == null) {
+                    missing += MissingField.Time
+                }
             }
 
             CommandIntent.Cancel,
@@ -215,6 +229,15 @@ class AtomCommandParser(
     private fun parseRecurrence(text: String, conflicts: MutableList<String>): RecurrenceUpdate {
         val clears = ClearRecurrencePattern.containsMatchIn(text)
         val candidates = mutableListOf<Pair<String, String>>()
+        val hourlyMatches = HourlyIntervalPattern.findAll(text).toList()
+        hourlyMatches.forEach { match ->
+            val hours = match.groupValues[1].toIntOrNull()
+            if (hours == null || hours !in 1..24) {
+                conflicts += "Hourly recurrence must be between 1 and 24 hours."
+            } else {
+                candidates += "FREQ=HOURLY;INTERVAL=$hours" to hourlyIntervalLabel(hours)
+            }
+        }
         if (EveryWeekdayPattern.containsMatchIn(text)) {
             candidates += "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" to "Every weekday"
         }
@@ -222,7 +245,9 @@ class AtomCommandParser(
             val day = parseDayOfWeek(match.groupValues[1]) ?: return@forEach
             candidates += "FREQ=WEEKLY;BYDAY=${day.rruleCode()}" to "Every ${day.displayName()}"
         }
-        if (DailyPattern.containsMatchIn(text)) candidates += "FREQ=DAILY" to "Every day"
+        if (hourlyMatches.isEmpty() && DailyPattern.containsMatchIn(text)) {
+            candidates += "FREQ=DAILY" to "Every day"
+        }
         if (WeeklyPattern.containsMatchIn(text)) candidates += "FREQ=WEEKLY" to "Every week"
         if (MonthlyPattern.containsMatchIn(text)) candidates += "FREQ=MONTHLY" to "Every month"
 
@@ -359,6 +384,7 @@ class AtomCommandParser(
         .replace(NumericDatePattern, " ")
         .replace(MonthDatePattern, " ")
         .replace(WeekdayPattern, " ")
+        .replace(HourlyIntervalPattern, " ")
         .replace(EveryWeekdayPattern, " ")
         .replace(EveryWeekdayNamePattern, " ")
         .replace(DailyPattern, " ")
@@ -401,10 +427,18 @@ class AtomCommandParser(
         "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" -> "Every weekday"
         "FREQ=WEEKLY" -> "Every week"
         "FREQ=MONTHLY" -> "Every month"
-        else -> DayOfWeek.entries.firstNotNullOfOrNull { day ->
-            if (rule == "FREQ=WEEKLY;BYDAY=${day.rruleCode()}") "Every ${day.displayName()}" else null
-        }
+        else -> rule.hourlyIntervalHours()?.let(::hourlyIntervalLabel)
+            ?: DayOfWeek.entries.firstNotNullOfOrNull { day ->
+                if (rule == "FREQ=WEEKLY;BYDAY=${day.rruleCode()}") "Every ${day.displayName()}" else null
+            }
     }
+
+    private fun String?.hourlyIntervalHours(): Int? = this
+        ?.let { HourlyRulePattern.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+        ?.takeIf { it in 1..24 }
+
+    private fun hourlyIntervalLabel(hours: Int): String =
+        if (hours == 1) "Every hour" else "Every $hours hours"
 
     private fun CommandIntent.requiresContext(): Boolean = this != CommandIntent.Create
 
@@ -500,6 +534,8 @@ class AtomCommandParser(
         private val WeekdayPattern = Regex("(?i)\\b(?:(next)\\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b")
 
         private val ClearRecurrencePattern = Regex("(?i)\\b(?:stop\\s+repeating|don'?t\\s+repeat|do\\s+not\\s+repeat|no\\s+longer\\s+repeat|one[ -]time|once)\\b")
+        private val HourlyIntervalPattern = Regex("(?i)\\b(?:every|evrey)\\s+(\\d+)\\s+hours?(?:\\s+(?:(?:a|per|each)\\s+day|daily))?\\b")
+        private val HourlyRulePattern = Regex("FREQ=HOURLY;INTERVAL=(\\d+)", RegexOption.IGNORE_CASE)
         private val EveryWeekdayPattern = Regex("(?i)\\b(?:every\\s+weekday|weekdays)\\b")
         private val EveryWeekdayNamePattern = Regex("(?i)\\bevery\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b")
         private val DailyPattern = Regex("(?i)\\b(?:every\\s+day|daily)\\b")

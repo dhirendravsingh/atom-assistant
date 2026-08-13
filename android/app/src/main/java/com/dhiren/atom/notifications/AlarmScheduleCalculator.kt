@@ -2,6 +2,7 @@ package com.dhiren.atom.notifications
 
 import com.dhiren.atom.data.local.ReminderEntity
 import java.time.DayOfWeek
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -17,6 +18,9 @@ object AlarmScheduleCalculator {
         if (stored != null && stored.isAfter(now)) return stored
 
         val rule = reminder.recurrenceRule ?: return null
+        rule.hourlyIntervalHours()?.let { intervalHours ->
+            return nextHourly(reminder, stored, now, intervalHours)
+        }
         val time = reminder.localTime?.let { runCatching { LocalTime.parse(it) }.getOrNull() } ?: return null
         val zone = runCatching { ZoneId.of(reminder.timezone) }.getOrNull() ?: return null
         val localNow = now.atZone(zone)
@@ -27,6 +31,32 @@ object AlarmScheduleCalculator {
             rule == "FREQ=MONTHLY" -> nextMonthly(reminder, localNow, time, zone)
             else -> null
         }?.toInstant()
+    }
+
+    private fun nextHourly(
+        reminder: ReminderEntity,
+        stored: Instant?,
+        now: Instant,
+        intervalHours: Long,
+    ): Instant? {
+        val zone = runCatching { ZoneId.of(reminder.timezone) }.getOrNull() ?: return null
+        val localAnchor = reminder.localDate
+            ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            ?.let { date ->
+                reminder.localTime
+                    ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                    ?.let { time -> ZonedDateTime.of(date, time, zone).toInstant() }
+            }
+        val createdAnchor = runCatching { Instant.parse(reminder.createdAtUtc) }
+            .getOrNull()
+            ?.plus(Duration.ofHours(intervalHours))
+        val anchor = stored ?: localAnchor ?: createdAnchor ?: return null
+        if (anchor.isAfter(now)) return anchor
+
+        val intervalSeconds = Duration.ofHours(intervalHours).seconds
+        val elapsedSeconds = Duration.between(anchor, now).seconds.coerceAtLeast(0)
+        val intervalsToAdvance = (elapsedSeconds / intervalSeconds) + 1
+        return anchor.plusSeconds(intervalSeconds * intervalsToAdvance)
     }
 
     private fun nextDaily(now: ZonedDateTime, time: LocalTime): ZonedDateTime {
@@ -88,3 +118,14 @@ object AlarmScheduleCalculator {
         else -> null
     }
 }
+
+internal fun isElapsedIntervalRecurrence(rule: String?): Boolean =
+    rule.hourlyIntervalHours() != null
+
+private fun String?.hourlyIntervalHours(): Long? =
+    Regex("FREQ=HOURLY;INTERVAL=(\\d+)", RegexOption.IGNORE_CASE)
+        .matchEntire(this.orEmpty())
+        ?.groupValues
+        ?.get(1)
+        ?.toLongOrNull()
+        ?.takeIf { it in 1..24 }

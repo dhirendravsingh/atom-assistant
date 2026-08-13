@@ -98,6 +98,23 @@ class ReminderRepositoryTest {
         assertEquals("Every weekday", entity.toUi(clock, timezone).recurrence)
     }
 
+    @Test
+    fun `hourly recurrence rule and next occurrence are persisted`() {
+        val entity = reminder(
+            date = "Every 2 hours",
+            time = "7:30 PM",
+            recurrence = "Every 2 hours",
+        ).copy(
+            localDate = "2026-08-01",
+            localTime = "19:30",
+            recurrenceRule = "FREQ=HOURLY;INTERVAL=2",
+        ).toEntity(clock = clock, zone = timezone)
+
+        assertEquals("FREQ=HOURLY;INTERVAL=2", entity.recurrenceRule)
+        assertEquals("2026-08-01T14:00:00Z", entity.scheduledAtUtc)
+        assertEquals("Every 2 hours", entity.toUi(clock, timezone).recurrence)
+    }
+
     private fun reminder(
         date: String?,
         time: String?,

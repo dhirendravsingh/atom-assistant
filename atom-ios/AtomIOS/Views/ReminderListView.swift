@@ -6,6 +6,7 @@ struct ReminderListView: View {
   @Environment(\.modelContext) private var modelContext
   @Query(sort: \ReminderRecord.createdAt, order: .reverse) private var reminders: [ReminderRecord]
   @State private var editingReminder: ReminderRecord?
+  @State private var searchText = ""
 
   var body: some View {
     Group {
@@ -28,6 +29,11 @@ struct ReminderListView: View {
       }
     }
     .navigationTitle("Reminders")
+    .searchable(
+      text: $searchText,
+      placement: .navigationBarDrawer(displayMode: .always),
+      prompt: "Search reminder words"
+    )
     .background(AtomColors.canvas)
     .sheet(item: $editingReminder) { reminder in
       ReminderEditView(reminder: reminder)
@@ -36,7 +42,7 @@ struct ReminderListView: View {
 
   @ViewBuilder
   private var scheduledSection: some View {
-    let values = reminders.filter { $0.state == "scheduled" }
+    let values = matchingReminders.filter { $0.state == "scheduled" }
     if !values.isEmpty {
       Section("UPCOMING") {
         ForEach(values) { reminder in
@@ -57,7 +63,7 @@ struct ReminderListView: View {
 
   @ViewBuilder
   private var unscheduledSection: some View {
-    let values = reminders.filter { $0.state == "unscheduled" }
+    let values = matchingReminders.filter { $0.state == "unscheduled" }
     if !values.isEmpty {
       Section("UNSCHEDULED") {
         ForEach(values) { reminder in
@@ -77,7 +83,7 @@ struct ReminderListView: View {
 
   @ViewBuilder
   private var missedSection: some View {
-    let values = reminders.filter { $0.state == "missed" }
+    let values = matchingReminders.filter { $0.state == "missed" }
     if !values.isEmpty {
       Section("MISSED") {
         ForEach(values) { reminder in
@@ -97,7 +103,7 @@ struct ReminderListView: View {
 
   @ViewBuilder
   private var completedSection: some View {
-    let values = reminders.filter { $0.state == "completed" }
+    let values = matchingReminders.filter { $0.state == "completed" }
     if !values.isEmpty {
       Section("COMPLETED") {
         ForEach(values) { reminder in
@@ -108,6 +114,15 @@ struct ReminderListView: View {
             }
         }
       }
+    }
+  }
+
+  private var matchingReminders: [ReminderRecord] {
+    let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !query.isEmpty else { return reminders }
+    return reminders.filter { reminder in
+      [reminder.title, reminder.source, reminder.localDate ?? "", reminder.localTime ?? ""]
+        .contains { $0.localizedCaseInsensitiveContains(query) }
     }
   }
 

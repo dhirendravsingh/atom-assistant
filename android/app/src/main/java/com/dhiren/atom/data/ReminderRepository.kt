@@ -8,6 +8,7 @@ import com.dhiren.atom.notifications.AlarmReconciliationResult
 import com.dhiren.atom.notifications.MissedReminderOccurrence
 import com.dhiren.atom.notifications.NoOpReminderAlarmScheduler
 import com.dhiren.atom.notifications.ReminderAlarmScheduler
+import com.dhiren.atom.notifications.isElapsedIntervalRecurrence
 import com.dhiren.atom.ui.ReminderAccent
 import com.dhiren.atom.ui.ReminderState
 import com.dhiren.atom.ui.ReminderUi
@@ -130,7 +131,11 @@ class ReminderRepository(
         if (existing.recurrenceRule == null) return
         val now = Instant.now(clock)
         val nextTrigger = AlarmScheduleCalculator.nextTrigger(
-            existing.copy(scheduledAtUtc = null),
+            if (isElapsedIntervalRecurrence(existing.recurrenceRule)) {
+                existing
+            } else {
+                existing.copy(scheduledAtUtc = null)
+            },
             now.plusSeconds(1),
         ) ?: return
         val zone = runCatching { ZoneId.of(existing.timezone) }.getOrDefault(zoneProvider())
@@ -211,7 +216,14 @@ class ReminderRepository(
     }
 
     private fun nextRecurringTrigger(reminder: ReminderEntity, now: Instant): Instant? =
-        AlarmScheduleCalculator.nextTrigger(reminder.copy(scheduledAtUtc = null), now.plusSeconds(1))
+        AlarmScheduleCalculator.nextTrigger(
+            if (isElapsedIntervalRecurrence(reminder.recurrenceRule)) {
+                reminder
+            } else {
+                reminder.copy(scheduledAtUtc = null)
+            },
+            now.plusSeconds(1),
+        )
 
     private suspend fun persistRecurringTrigger(
         reminder: ReminderEntity,
@@ -363,12 +375,19 @@ private fun String.resolveRelative(now: Instant, zone: ZoneId): ZonedDateTime? {
     }
 }
 
-private fun String?.toRecurrenceRule(): String? = when (this?.trim()?.lowercase(Locale.US)) {
+private fun String?.toRecurrenceRule(): String? = when (val normalized = this?.trim()?.lowercase(Locale.US)) {
     "every day", "daily" -> "FREQ=DAILY"
     "every weekday", "weekdays" -> "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR"
     "every week", "weekly" -> "FREQ=WEEKLY"
     "every month", "monthly" -> "FREQ=MONTHLY"
-    else -> this?.takeIf { it.startsWith("FREQ=", ignoreCase = true) }
+    else -> Regex("every\\s+(\\d+)\\s+hours?")
+        .matchEntire(normalized.orEmpty())
+        ?.groupValues
+        ?.get(1)
+        ?.toIntOrNull()
+        ?.takeIf { it in 1..24 }
+        ?.let { "FREQ=HOURLY;INTERVAL=$it" }
+        ?: this?.takeIf { it.startsWith("FREQ=", ignoreCase = true) }
 }
 
 private fun String?.toRecurrenceLabel(): String? = when (this) {
@@ -376,13 +395,20 @@ private fun String?.toRecurrenceLabel(): String? = when (this) {
     "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" -> "Every weekday"
     "FREQ=WEEKLY" -> "Every week"
     "FREQ=MONTHLY" -> "Every month"
-    else -> DayOfWeek.entries.firstNotNullOfOrNull { day ->
-        if (this == "FREQ=WEEKLY;BYDAY=${day.name.take(2)}") {
-            "Every ${day.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() }}"
-        } else {
-            null
+    else -> Regex("FREQ=HOURLY;INTERVAL=(\\d+)", RegexOption.IGNORE_CASE)
+        .matchEntire(this.orEmpty())
+        ?.groupValues
+        ?.get(1)
+        ?.toIntOrNull()
+        ?.takeIf { it in 1..24 }
+        ?.let { if (it == 1) "Every hour" else "Every $it hours" }
+        ?: DayOfWeek.entries.firstNotNullOfOrNull { day ->
+            if (this == "FREQ=WEEKLY;BYDAY=${day.name.take(2)}") {
+                "Every ${day.name.lowercase(Locale.US).replaceFirstChar { it.uppercase() }}"
+            } else {
+                null
+            }
         }
-    }
 }
 
 private fun LocalDate.toDisplayLabel(today: LocalDate): String {

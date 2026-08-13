@@ -42,6 +42,9 @@ For each complete schedule Atom creates a local Android alarm:
   date or time.
 - For recurrence, schedule only the nearest future occurrence; after it fires,
   calculate and register the next one from the RRULE.
+- Hourly intervals such as `FREQ=HOURLY;INTERVAL=2` retain their original
+  cadence: a late delivery or reboot skips elapsed occurrences and schedules
+  the next future interval without drifting from the stored occurrence.
 - Dedupe by occurrence ID so a local alarm and backup push cannot notify twice.
 
 ## Device lifecycle
@@ -87,6 +90,11 @@ the alarm receiver directly. iOS records foreground deliveries immediately and
 reconciles notifications still present in Notification Center when the app
 becomes active, because iOS does not expose a universal background callback for
 the instant a notification is displayed.
+
+Selecting a history entry opens a dismissible detail view showing the original
+scheduled time, the time the alarm rang, the recorded action, and any
+replacement schedule created by Snooze or Remind Again. Ignored entries use a
+soft red full-card treatment so they remain visually distinct in both themes.
 
 Android cannot guarantee a ring after the owner force-stops the app, revokes
 permission, powers off the device, or applies aggressive vendor battery

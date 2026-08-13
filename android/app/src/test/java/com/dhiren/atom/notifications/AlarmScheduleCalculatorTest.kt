@@ -96,6 +96,37 @@ class AlarmScheduleCalculatorTest {
         )
     }
 
+    @Test
+    fun `hourly interval advances from the stored occurrence without drift`() {
+        val reminder = reminder(
+            scheduledAtUtc = "2026-08-01T12:00:00Z",
+            localDate = "2026-08-01",
+            localTime = "17:30",
+            recurrenceRule = "FREQ=HOURLY;INTERVAL=2",
+        )
+
+        assertEquals(
+            Instant.parse("2026-08-01T14:00:00Z"),
+            AlarmScheduleCalculator.nextTrigger(reminder, now),
+        )
+    }
+
+    @Test
+    fun `hourly interval skips elapsed occurrences after downtime`() {
+        val reminder = reminder(
+            scheduledAtUtc = "2026-08-01T09:00:00Z",
+            localDate = "2026-08-01",
+            localTime = "14:30",
+            recurrenceRule = "FREQ=HOURLY;INTERVAL=2",
+        )
+        val restoredAt = Instant.parse("2026-08-01T12:10:00Z")
+
+        assertEquals(
+            Instant.parse("2026-08-01T13:00:00Z"),
+            AlarmScheduleCalculator.nextTrigger(reminder, restoredAt),
+        )
+    }
+
     private fun reminder(
         scheduledAtUtc: String?,
         localDate: String? = "2026-08-01",

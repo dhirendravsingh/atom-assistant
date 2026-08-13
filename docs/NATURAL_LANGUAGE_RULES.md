@@ -80,14 +80,21 @@ Supported Phase 1 recurrence patterns:
 | Phrase | Stored `recurrence_rule` |
 | --- | --- |
 | every day / daily | `FREQ=DAILY` |
+| every 2 hours / every 2 hours a day | `FREQ=HOURLY;INTERVAL=2` |
 | every weekday / weekdays | `FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR` |
 | every Monday | `FREQ=WEEKLY;BYDAY=MO` |
 | every week / weekly | `FREQ=WEEKLY` |
 | every month / monthly | `FREQ=MONTHLY` |
 
-A recurrence still needs a local time. If it is missing, Atom marks the reminder
-`needs_time` and asks once. “Stop repeating”, “don’t repeat”, “one time”, and
-“once” clear the recurrence during an edit.
+Calendar recurrence still needs a local time. If it is missing, Atom marks the
+reminder `needs_time` and asks once. An hourly interval recurrence starts one
+interval from confirmation when no first time is provided, then saves and
+schedules only its nearest occurrence. Intervals from 1 to 24 hours are
+supported. “Stop repeating”, “don’t repeat”, “one time”, and “once” clear the
+recurrence during an edit.
+
+The common typed/transcription variant “evrey 2 hours” is normalized to the
+same interval rule.
 
 ## Edit and action examples
 

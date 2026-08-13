@@ -160,6 +160,40 @@ class AtomCommandParserTest {
     }
 
     @Test
+    fun `creates an hourly interval recurrence starting one interval from now`() {
+        val result = parser.parse("Remind me to drink water evrey 2 hours a day")
+
+        assertEquals(CommandIntent.Create, result.intent)
+        assertEquals("Drink water", result.task)
+        assertEquals("FREQ=HOURLY;INTERVAL=2", result.recurrenceRule)
+        assertEquals("Every 2 hours", result.recurrenceLabel)
+        assertEquals(LocalDate.of(2026, 8, 1), result.localDate)
+        assertEquals(LocalTime.of(19, 30), result.localTime)
+        assertEquals(Instant.parse("2026-08-01T14:00:00Z"), result.scheduledAtUtc)
+        assertTrue(result.missingFields.isEmpty())
+        assertTrue(result.isActionable)
+    }
+
+    @Test
+    fun `hourly interval can use an explicit first time`() {
+        val result = parser.parse("Every 3 hours at 8 PM remind me to stretch")
+
+        assertEquals("Stretch", result.task)
+        assertEquals("FREQ=HOURLY;INTERVAL=3", result.recurrenceRule)
+        assertEquals(LocalTime.of(20, 0), result.localTime)
+        assertEquals(Instant.parse("2026-08-01T14:30:00Z"), result.scheduledAtUtc)
+        assertTrue(result.isActionable)
+    }
+
+    @Test
+    fun `rejects hourly intervals beyond one day`() {
+        val result = parser.parse("Remind me to drink water every 25 hours a day")
+
+        assertTrue(result.conflicts.any { "between 1 and 24 hours" in it })
+        assertFalse(result.isActionable)
+    }
+
+    @Test
     fun `creates weekday recurrence`() {
         val result = parser.parse("Every weekday at 9 AM remind me to review priorities")
 

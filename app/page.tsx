@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-type Screen = "home" | "capture" | "reminders" | "settings";
+type Screen = "home" | "capture" | "reminders" | "notifications" | "settings";
 type Meridiem = "AM" | "PM";
 type Theme = "light" | "dark";
 type LogoVariant =
@@ -78,6 +78,25 @@ type Reminder = {
   accent: "mint" | "coral" | "lime";
   recurrenceRule: string | null;
   recurrenceLabel: string | null;
+};
+
+type NotificationOutcome =
+  | "rang"
+  | "snoozed"
+  | "completed"
+  | "ignored"
+  | "remind_again";
+
+type NotificationHistoryItem = {
+  id: number;
+  reminderTitle: string;
+  outcome: NotificationOutcome;
+  outcomeLabel: string;
+  scheduledFor: string;
+  rangAt: string;
+  actionAt: string;
+  detail: string;
+  nextReminderAt?: string;
 };
 
 type Draft = {
@@ -171,19 +190,6 @@ const INITIAL_REMINDERS: Reminder[] = [
     recurrenceLabel: null,
   },
   {
-    id: 3,
-    title: "Call Rhea about the launch",
-    dateLabel: "Friday · Jul 31",
-    time: null,
-    meridiem: null,
-    rawText: "Atom, remind me to call Rhea about the launch on Friday.",
-    source: "Voice",
-    state: "needs_time",
-    accent: "lime",
-    recurrenceRule: null,
-    recurrenceLabel: null,
-  },
-  {
     id: 4,
     title: "Review today’s priorities",
     dateLabel: "Every weekday",
@@ -199,9 +205,54 @@ const INITIAL_REMINDERS: Reminder[] = [
   },
 ];
 
+const INITIAL_NOTIFICATION_HISTORY: NotificationHistoryItem[] = [
+  {
+    id: 1,
+    reminderTitle: "Send product brief to Aisha",
+    outcome: "ignored",
+    outcomeLabel: "Ignored",
+    scheduledFor: "Today · 6:30 PM",
+    rangAt: "Today · 6:30 PM",
+    actionAt: "Today · 6:37 PM",
+    detail: "The alarm rang and was dismissed without completing the reminder.",
+  },
+  {
+    id: 2,
+    reminderTitle: "Review today’s priorities",
+    outcome: "snoozed",
+    outcomeLabel: "Snoozed",
+    scheduledFor: "Today · 9:00 AM",
+    rangAt: "Today · 9:00 AM",
+    actionAt: "Today · 9:01 AM",
+    nextReminderAt: "Today · 9:11 AM",
+    detail: "Snoozed for 10 minutes. Atom scheduled a replacement alarm.",
+  },
+  {
+    id: 3,
+    reminderTitle: "Take evening medicine",
+    outcome: "completed",
+    outcomeLabel: "Completed",
+    scheduledFor: "Yesterday · 8:00 PM",
+    rangAt: "Yesterday · 8:00 PM",
+    actionAt: "Yesterday · 8:02 PM",
+    detail: "Marked done from the ringing screen.",
+  },
+  {
+    id: 4,
+    reminderTitle: "Call home",
+    outcome: "remind_again",
+    outcomeLabel: "Remind again",
+    scheduledFor: "Yesterday · 4:30 PM",
+    rangAt: "Yesterday · 4:30 PM",
+    actionAt: "Yesterday · 4:31 PM",
+    nextReminderAt: "Yesterday · 5:30 PM",
+    detail: "Asked Atom to remind again in one hour.",
+  },
+];
+
 const SAMPLE_COMMANDS = [
   "Remind me in 20 minutes to check the oven",
-  "Please remind me to call Rhea",
+  "Please remind me to water the plants",
   "Remind me to prepare the deck tomorrow",
   "At 4:30 PM remind me to call home",
   "Every weekday at 9 AM remind me to review my priorities",
@@ -260,6 +311,10 @@ function cleanTask(rawText: string) {
     )
     .replace(/\bin\s+\d+\s+(?:minutes?|hours?|days?)\b/gi, "")
     .replace(
+      /\b(?:every|evrey)\s+\d+\s+hours?(?:\s+(?:(?:a|per|each)\s+day|daily))?\b/gi,
+      "",
+    )
+    .replace(
       /\b(?:every\s+(?:day|weekday|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|daily|weekdays|weekly|monthly)\b/gi,
       "",
     )
@@ -290,8 +345,20 @@ function parseCommand(rawText: string, source: "Voice" | "Text"): Draft {
   let relativeLabel: string | undefined;
   let recurrenceRule: string | null = null;
   let recurrenceLabel: string | null = null;
+  let hourlyInterval: number | null = null;
 
-  if (/\b(?:every day|daily)\b/.test(normalized)) {
+  const hourlyIntervalMatch = normalized.match(
+    /\b(?:every|evrey)\s+(\d+)\s+hours?(?:\s+(?:(?:a|per|each)\s+day|daily))?\b/,
+  );
+  if (hourlyIntervalMatch) {
+    const parsedInterval = Number(hourlyIntervalMatch[1]);
+    if (parsedInterval >= 1 && parsedInterval <= 24) {
+      hourlyInterval = parsedInterval;
+      recurrenceRule = `FREQ=HOURLY;INTERVAL=${parsedInterval}`;
+      recurrenceLabel =
+        parsedInterval === 1 ? "Every hour" : `Every ${parsedInterval} hours`;
+    }
+  } else if (/\b(?:every day|daily)\b/.test(normalized)) {
     recurrenceRule = "FREQ=DAILY";
     recurrenceLabel = "Every day";
   } else if (/\b(?:every weekday|weekdays)\b/.test(normalized)) {
@@ -372,6 +439,15 @@ function parseCommand(rawText: string, source: "Voice" | "Text"): Draft {
         time = `${hour}:${timeMatch[2] ?? "00"}`;
         meridiem = timeMatch[3].startsWith("a") ? "AM" : "PM";
       }
+    }
+
+    if (hourlyInterval && !time) {
+      const firstOccurrence = new Date(
+        now.getTime() + hourlyInterval * 3_600_000,
+      );
+      const formatted = formatClock(firstOccurrence);
+      time = formatted.time;
+      meridiem = formatted.meridiem;
     }
   }
 
@@ -572,6 +648,10 @@ export default function HomePage() {
   const [cloudFallback, setCloudFallback] = useState(false);
   const [toast, setToast] = useState("");
   const [activeFilter, setActiveFilter] = useState("Upcoming");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedNotification, setSelectedNotification] =
+    useState<NotificationHistoryItem | null>(null);
   const [theme, setTheme] = useState<Theme>("light");
   const [logoVariant, setLogoVariant] = useState<LogoVariant>("original");
   const [logoSheetOpen, setLogoSheetOpen] = useState(false);
@@ -652,10 +732,22 @@ export default function HomePage() {
     setScreen(next);
     setDraft(null);
     setFollowUp(false);
+    setIsListening(false);
+    setSearchOpen(false);
+    setSearchQuery("");
     if (next === "capture") {
       setCaptureText("");
       setCaptureSource("Text");
     }
+  }
+
+  function openVoiceCapture() {
+    setScreen("capture");
+    setCaptureSource("Voice");
+    setCaptureText("");
+    setDraft(null);
+    setFollowUp(false);
+    setIsListening(true);
   }
 
   function simulateVoice(text = "Hey Atom, remind me to send the proposal tomorrow at 12 PM") {
@@ -864,12 +956,22 @@ export default function HomePage() {
     setToast("Done. Nicely handled.");
   }
 
-  const filteredReminders =
+  const filteredRemindersByStatus =
     activeFilter === "Unscheduled"
       ? reminders.filter((item) => item.state !== "scheduled")
       : activeFilter === "Today"
         ? reminders.filter((item) => item.dateLabel?.startsWith("Today"))
         : reminders;
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredReminders = normalizedSearch
+    ? filteredRemindersByStatus.filter((item) =>
+        [item.title, item.rawText, item.dateLabel ?? "", item.time ?? ""]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch),
+      )
+    : filteredRemindersByStatus;
 
   return (
     <main className={`prototype theme-${theme}`}>
@@ -924,10 +1026,10 @@ export default function HomePage() {
                     </button>
                     <button
                       className="icon-button alarm-preview-button"
-                      onClick={() => setAlarmOpen(true)}
+                      onClick={() => navigate("notifications")}
                       type="button"
-                      aria-label="Preview alarm mode"
-                      data-testid="preview-alarm"
+                      aria-label="Open notification history"
+                      data-testid="open-notification-history"
                     >
                       <Bell size={18} />
                       <span />
@@ -977,9 +1079,10 @@ export default function HomePage() {
                       }}
                     />
                     <button
-                      onClick={() => simulateVoice()}
+                      onClick={openVoiceCapture}
                       type="button"
                       aria-label="Record a reminder"
+                      data-testid="home-voice-capture"
                     >
                       <Mic size={19} />
                     </button>
@@ -1072,11 +1175,18 @@ export default function HomePage() {
 
                   <button
                     className={`voice-orb ${isListening ? "listening" : ""}`}
-                    onClick={() => simulateVoice()}
+                    onClick={() => {
+                      if (isListening) {
+                        setIsListening(false);
+                      } else {
+                        simulateVoice();
+                      }
+                    }}
                     type="button"
                     aria-label={
                       isListening ? "Stop listening" : "Start voice capture"
                     }
+                    data-testid="capture-voice-orb"
                   >
                     <span className="voice-ring ring-a" />
                     <span className="voice-ring ring-b" />
@@ -1236,10 +1346,44 @@ export default function HomePage() {
                     </span>
                     <h2>Reminders</h2>
                   </div>
-                  <button className="icon-button" type="button" aria-label="Search">
+                  <button
+                    className={`icon-button ${searchOpen ? "active-search" : ""}`}
+                    onClick={() => {
+                      setSearchOpen((open) => !open);
+                      if (searchOpen) setSearchQuery("");
+                    }}
+                    type="button"
+                    aria-label="Search reminders"
+                    aria-expanded={searchOpen}
+                    data-testid="open-reminder-search"
+                  >
                     <Search size={19} />
                   </button>
                 </header>
+
+                {searchOpen && (
+                  <div className="reminder-search-popover" role="search">
+                    <Search size={17} />
+                    <input
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search reminder words…"
+                      aria-label="Search reminder words"
+                      data-testid="reminder-search-input"
+                    />
+                    <button
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSearchOpen(false);
+                      }}
+                      type="button"
+                      aria-label="Close search"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
 
                 <div className="filter-row">
                   {["Upcoming", "Today", "Unscheduled"].map((filter) => (
@@ -1288,6 +1432,66 @@ export default function HomePage() {
                 >
                   <Plus size={22} />
                 </button>
+              </section>
+            )}
+
+            {screen === "notifications" && (
+              <section className="screen notifications-screen">
+                <header className="notification-screen-header">
+                  <button
+                    className="icon-button"
+                    onClick={() => navigate("home")}
+                    type="button"
+                    aria-label="Back to home"
+                  >
+                    <ArrowLeft size={20} />
+                  </button>
+                  <div>
+                    <span className="eyebrow">
+                      <i />
+                      Notifications
+                    </span>
+                    <h2>Alarm activity</h2>
+                  </div>
+                </header>
+
+                <p className="notification-intro">
+                  Every ring and the action you took, newest first.
+                </p>
+
+                <div className="notification-history-list">
+                  {INITIAL_NOTIFICATION_HISTORY.map((item) => (
+                    <button
+                      className={`notification-history-card outcome-${item.outcome}`}
+                      onClick={() => setSelectedNotification(item)}
+                      type="button"
+                      key={item.id}
+                      data-testid={`notification-${item.id}`}
+                    >
+                      <span className="notification-history-icon">
+                        {item.outcome === "completed" ? (
+                          <Check size={18} />
+                        ) : item.outcome === "snoozed" ||
+                          item.outcome === "remind_again" ? (
+                          <RotateCcw size={18} />
+                        ) : item.outcome === "ignored" ? (
+                          <X size={18} />
+                        ) : (
+                          <Bell size={18} />
+                        )}
+                      </span>
+                      <span className="notification-history-copy">
+                        <span>
+                          <strong>{item.reminderTitle}</strong>
+                          <em>{item.outcomeLabel}</em>
+                        </span>
+                        <small>{item.detail}</small>
+                        <time>{item.actionAt}</time>
+                      </span>
+                      <ChevronRight size={17} />
+                    </button>
+                  ))}
+                </div>
               </section>
             )}
 
@@ -1427,8 +1631,76 @@ export default function HomePage() {
               </section>
             )}
 
-            <BottomNav screen={screen} onChange={navigate} />
+            {screen !== "notifications" && (
+              <BottomNav screen={screen} onChange={navigate} />
+            )}
           </div>
+
+          {selectedNotification && (
+            <div
+              className="modal-layer notification-detail-layer"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Reminder notification details"
+              data-testid="notification-detail-dialog"
+            >
+              <button
+                className="modal-backdrop"
+                onClick={() => setSelectedNotification(null)}
+                type="button"
+                aria-label="Close notification details"
+              />
+              <section className="notification-detail-card">
+                <div className="notification-detail-heading">
+                  <span
+                    className={`notification-history-icon outcome-${selectedNotification.outcome}`}
+                  >
+                    {selectedNotification.outcome === "completed" ? (
+                      <Check size={19} />
+                    ) : selectedNotification.outcome === "ignored" ? (
+                      <X size={19} />
+                    ) : (
+                      <Bell size={19} />
+                    )}
+                  </span>
+                  <div>
+                    <small>{selectedNotification.outcomeLabel}</small>
+                    <h3>{selectedNotification.reminderTitle}</h3>
+                  </div>
+                  <button
+                    onClick={() => setSelectedNotification(null)}
+                    type="button"
+                    aria-label="Close"
+                    data-testid="close-notification-detail"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <p>{selectedNotification.detail}</p>
+                <dl>
+                  <div>
+                    <dt>Reminder set for</dt>
+                    <dd>{selectedNotification.scheduledFor}</dd>
+                  </div>
+                  <div>
+                    <dt>Alarm rang</dt>
+                    <dd>{selectedNotification.rangAt}</dd>
+                  </div>
+                  <div>
+                    <dt>Action recorded</dt>
+                    <dd>{selectedNotification.actionAt}</dd>
+                  </div>
+                  {selectedNotification.nextReminderAt && (
+                    <div className="next-alarm-detail">
+                      <dt>Next reminder</dt>
+                      <dd>{selectedNotification.nextReminderAt}</dd>
+                    </div>
+                  )}
+                </dl>
+              </section>
+            </div>
+          )}
 
           {followUp && draft && (
             <div className="modal-layer followup-layer" role="dialog" aria-modal="true">
@@ -1972,7 +2244,7 @@ export default function HomePage() {
           <div className="flow-actions">
             <button
               onClick={() =>
-                simulateVoice("Please remind me to call Rhea")
+                simulateVoice("Please remind me to water the plants")
               }
               type="button"
             >

@@ -16,6 +16,7 @@ object AlarmContract {
 
     const val ExtraReminderId = "extra_reminder_id"
     const val ExtraReminderTitle = "extra_reminder_title"
+    const val ExtraScheduledAtUtc = "extra_scheduled_at_utc"
 
     const val DefaultSnoozeMinutes = 10L
     const val DefaultRemindAgainMinutes = 60L

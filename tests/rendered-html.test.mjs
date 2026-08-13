@@ -39,6 +39,7 @@ test("server-renders the Atom prototype", async () => {
   assert.match(html, /ATOM MARK STUDIES/);
   assert.match(html, /Preview Orbit Atom logo/);
   assert.match(html, /Open Atom logo ideas/);
+  assert.match(html, /Open notification history/);
   assert.match(html, /Preview Nucleus Atom logo/);
   assert.match(html, /Preview Arc Atom logo/);
   assert.match(html, /Phase 1/);

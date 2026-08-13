@@ -28,10 +28,10 @@ cd android
 The debug APK is written to:
 
 ```text
-android/app/build/outputs/apk/debug/atom-android-debug.apk
+android/app/build/outputs/apk/debug/atom.v3.apk
 ```
 
-The signed release artifact is named `atom-android-release.apk`.
+The V3 APK artifact is named `atom.v3.apk` (version `0.3.0`, code `3`).
 
 ## Run the iOS app
 

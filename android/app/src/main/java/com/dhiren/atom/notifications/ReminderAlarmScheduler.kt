@@ -24,7 +24,7 @@ class AndroidReminderAlarmScheduler(context: Context) : ReminderAlarmScheduler {
 
     override fun schedule(reminderId: Long, title: String, triggerAt: Instant) {
         val operation = requireNotNull(
-            pendingIntent(reminderId, title, PendingIntent.FLAG_UPDATE_CURRENT),
+            pendingIntent(reminderId, title, triggerAt, PendingIntent.FLAG_UPDATE_CURRENT),
         )
         val triggerMillis = triggerAt.toEpochMilli()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
@@ -38,6 +38,7 @@ class AndroidReminderAlarmScheduler(context: Context) : ReminderAlarmScheduler {
         val operation = pendingIntent(
             reminderId = reminderId,
             title = "",
+            triggerAt = null,
             extraFlags = PendingIntent.FLAG_NO_CREATE,
         ) ?: return
         alarmManager.cancel(operation)
@@ -47,6 +48,7 @@ class AndroidReminderAlarmScheduler(context: Context) : ReminderAlarmScheduler {
     private fun pendingIntent(
         reminderId: Long,
         title: String,
+        triggerAt: Instant?,
         extraFlags: Int,
     ): PendingIntent? {
         val intent = Intent(appContext, ReminderAlarmReceiver::class.java).apply {
@@ -54,6 +56,7 @@ class AndroidReminderAlarmScheduler(context: Context) : ReminderAlarmScheduler {
             data = Uri.parse("atom://reminder/$reminderId/alarm")
             putExtra(AlarmContract.ExtraReminderId, reminderId)
             putExtra(AlarmContract.ExtraReminderTitle, title)
+            triggerAt?.let { putExtra(AlarmContract.ExtraScheduledAtUtc, it.toString()) }
         }
         return PendingIntent.getBroadcast(
             appContext,

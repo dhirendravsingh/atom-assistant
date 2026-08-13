@@ -259,12 +259,15 @@ final class NotificationScheduler: NSObject, UNUserNotificationCenterDelegate {
     let occurrenceID =
       (request.content.userInfo["occurrenceID"] as? String)
       .flatMap(UUID.init(uuidString:)) ?? reminderID
+    let scheduledAt = (request.content.userInfo["scheduledAt"] as? Double)
+      .map { Date(timeIntervalSince1970: $0) }
     recordHistory(
       id: occurrenceID,
       reminderID: reminderID,
       title: request.content.body,
       kind: .rang,
       detail: "Reminder rang",
+      resultingScheduledAt: scheduledAt,
       occurredAt: notification.date
     )
   }

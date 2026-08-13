@@ -44,6 +44,7 @@ class DeviceReliabilityManager(
                             title = occurrence.title,
                             eventType = NotificationHistoryEventType.Missed,
                             detail = "Delivered after the device became available",
+                            resultingScheduledAt = occurrence.scheduledAt,
                         )
                         if (!occurrence.recurring) {
                             reminderRepository.markMissed(occurrence.reminderId, occurrence.scheduledAt)

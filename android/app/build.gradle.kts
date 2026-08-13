@@ -38,8 +38,8 @@ android {
         applicationId = "com.dhiren.atom"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 3
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -91,7 +91,7 @@ androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.forEach { output ->
             (output as com.android.build.api.variant.impl.VariantOutputImpl).outputFileName.set(
-                "atom-android-${variant.buildType}.apk",
+                "atom.v3.apk",
             )
         }
     }
