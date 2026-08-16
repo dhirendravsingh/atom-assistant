@@ -38,6 +38,6 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: atom-v3-apk
-          path: android/app/build/outputs/apk/debug/atom.v3.apk
+          name: atom-v04-apk
+          path: android/app/build/outputs/apk/debug/atom.v.04.apk
           if-no-files-found: error

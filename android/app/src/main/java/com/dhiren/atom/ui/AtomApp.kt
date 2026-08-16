@@ -101,7 +101,6 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Snooze
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.AlertDialog
@@ -397,6 +396,7 @@ fun AtomApp() {
                                     currentScreen = AtomScreen.Capture
                                 },
                                 onOpenNotifications = { currentScreen = AtomScreen.Notifications },
+                                onOpenSettings = { currentScreen = AtomScreen.Settings },
                                 onSeeAll = { currentScreen = AtomScreen.Reminders },
                                 onEdit = {
                                     captureReturnScreen = AtomScreen.Today
@@ -626,6 +626,7 @@ private fun HomeScreen(
     onCapture: () -> Unit,
     onVoiceCapture: () -> Unit,
     onOpenNotifications: () -> Unit,
+    onOpenSettings: () -> Unit,
     onSeeAll: () -> Unit,
     onEdit: (ReminderUi) -> Unit,
 ) {
@@ -646,6 +647,7 @@ private fun HomeScreen(
                 onToggleTheme = onToggleTheme,
                 onLogoClick = onLogoClick,
                 onNotifications = onOpenNotifications,
+                onSettings = onOpenSettings,
             )
             Spacer(Modifier.height(28.dp))
             GreetingCard(
@@ -695,6 +697,7 @@ private fun AppHeader(
     onToggleTheme: () -> Unit,
     onLogoClick: () -> Unit,
     onNotifications: () -> Unit,
+    onSettings: () -> Unit,
 ) {
     val colors = LocalAtomPalette.current
     Row(
@@ -734,7 +737,9 @@ private fun AppHeader(
             modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .background(colors.ink),
+                .background(colors.ink)
+                .clickable(onClick = onSettings)
+                .semantics { contentDescription = "Open settings" },
             contentAlignment = Alignment.Center,
         ) {
             Text(ownerProfile.initial, color = colors.canvas, fontWeight = FontWeight.SemiBold)
@@ -1041,17 +1046,21 @@ private fun AtomBottomBar(
             horizontalArrangement = Arrangement.SpaceAround,
         ) {
             BottomDestination(Icons.Rounded.Home, "Today", selected == AtomScreen.Today) { onSelect(AtomScreen.Today) }
-            BottomDestination(Icons.Rounded.ListAlt, "Reminders", selected == AtomScreen.Reminders) { onSelect(AtomScreen.Reminders) }
-            FilledIconButton(
-                onClick = onAdd,
-                modifier = Modifier
-                    .size(54.dp)
-                    .shadow(12.dp, CircleShape, ambientColor = colors.mint.copy(alpha = .35f)),
-                colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.ink, contentColor = colors.canvas),
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "New reminder", modifier = Modifier.size(25.dp))
+                FilledIconButton(
+                    onClick = onAdd,
+                    modifier = Modifier
+                        .size(54.dp)
+                        .shadow(12.dp, CircleShape, ambientColor = colors.mint.copy(alpha = .35f)),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = colors.ink, contentColor = colors.canvas),
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = "New reminder", modifier = Modifier.size(25.dp))
+                }
             }
-            BottomDestination(Icons.Rounded.Settings, "Settings", selected == AtomScreen.Settings) { onSelect(AtomScreen.Settings) }
+            BottomDestination(Icons.Rounded.ListAlt, "Reminders", selected == AtomScreen.Reminders) { onSelect(AtomScreen.Reminders) }
         }
     }
 }

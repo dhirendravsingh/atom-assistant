@@ -28,10 +28,10 @@ cd android
 The debug APK is written to:
 
 ```text
-android/app/build/outputs/apk/debug/atom.v3.apk
+android/app/build/outputs/apk/debug/atom.v.04.apk
 ```
 
-The V3 APK artifact is named `atom.v3.apk` (version `0.3.0`, code `3`).
+The V0.4 APK artifact is named `atom.v.04.apk` (version `0.4.0`, code `4`).
 
 ## Run the iOS app
 
