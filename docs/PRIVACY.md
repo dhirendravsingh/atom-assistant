@@ -25,17 +25,18 @@ and an optional replacement schedule. Android stores it in Room and iOS stores
 it in SwiftData. It stays inside the respective app container and requires no
 additional permission.
 
-Voice is transcribed through Android's speech-recognition service. On Android
-12 and newer, Atom only enables voice when Android reports that the dedicated
-on-device recognizer is available. On older supported Android versions, Atom
-requests offline-preferred recognition; whether that stays fully offline
-depends on the speech service installed by the phone manufacturer. The UI
-identifies which mode is active.
+Voice is transcribed through Android's speech-recognition service. Atom uses a
+dedicated on-device recognizer when Android provides one. If that recognizer or
+its selected language is unavailable, Atom offers Android's standard speech
+service as a fallback. Before each online fallback, Atom explains that the
+phone's recognition provider may receive the microphone recording and waits
+for the owner to explicitly choose “Use online speech.” Atom does not send this
+audio to OpenAI or store it.
 
 Atom never stores raw microphone audio and does not build a voiceprint. It keeps
-only the editable transcript after recognition. If the offline recognizer or
-language pack is unavailable, typed entry remains available and no OpenAI
-fallback is enabled automatically.
+only the editable transcript after recognition. If online speech is declined,
+or neither Android recognizer can complete, typed entry remains available and
+no OpenAI fallback is enabled automatically.
 
 ## Optional OpenAI fallback
 

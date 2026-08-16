@@ -3,7 +3,8 @@
 | Scenario | Required behavior |
 | --- | --- |
 | Microphone permission denied | Keep text entry fully usable and show a button that opens Atom's Android app settings |
-| Speech unavailable offline | Explain that the recognizer or language pack is unavailable; preserve typed text and keep all text fields usable |
+| On-device speech or its language is unavailable | Offer Android's standard recognizer behind an explicit per-recording online-audio consent; preserve typed text if declined |
+| No Android speech-recognition service is installed | Explain that voice is unavailable; preserve typed text and keep all text fields usable |
 | Speech recognition fails after a partial result | Restore the field's value from before listening so partial output never overwrites typed text |
 | Empty or low-confidence transcript | Keep the editable transcript and ask the owner to retry or type |
 | Date or time missing | Ask once with mic and text; allow Save to Unscheduled |

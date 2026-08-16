@@ -19,6 +19,7 @@ sealed interface SpeechCaptureState {
     data object Idle : SpeechCaptureState
     data class Listening(val target: SpeechInputTarget) : SpeechCaptureState
     data class Processing(val target: SpeechInputTarget) : SpeechCaptureState
+    data class OnlineConsentRequired(val target: SpeechInputTarget) : SpeechCaptureState
     data class Error(val message: String) : SpeechCaptureState
     data class Unavailable(val message: String) : SpeechCaptureState
 }
@@ -37,14 +38,33 @@ class AtomSpeechRecognizer(
 ) : RecognitionListener {
     private val appContext = context.applicationContext
     val capability: SpeechCapability = capability(appContext)
+    private var usingOnDeviceRecognizer = capability.isGuaranteedOnDevice
+    val isUsingOnDeviceRecognition: Boolean
+        get() = usingOnDeviceRecognizer
     private var activeTarget: SpeechInputTarget? = null
-    private var recognizer: SpeechRecognizer? = createRecognizer(appContext, capability)
+    private var recognizer: SpeechRecognizer? = createRecognizer(appContext, usingOnDeviceRecognizer)
 
     init {
+        if (recognizer == null && usingOnDeviceRecognizer) {
+            usingOnDeviceRecognizer = false
+        }
         recognizer?.setRecognitionListener(this)
     }
 
     fun start(target: SpeechInputTarget) {
+        if (!capability.available) {
+            onStateChanged(SpeechCaptureState.Unavailable(capability.description))
+            return
+        }
+        if (!usingOnDeviceRecognizer) {
+            if (!SpeechRecognizer.isRecognitionAvailable(appContext)) {
+                onStateChanged(SpeechCaptureState.Unavailable(capability.description))
+                return
+            }
+            activeTarget = target
+            onStateChanged(SpeechCaptureState.OnlineConsentRequired(target))
+            return
+        }
         val activeRecognizer = recognizer
         if (activeRecognizer == null) {
             onStateChanged(SpeechCaptureState.Unavailable(capability.description))
@@ -54,6 +74,42 @@ class AtomSpeechRecognizer(
         activeTarget = target
         onStateChanged(SpeechCaptureState.Listening(target))
         activeRecognizer.startListening(recognitionIntent())
+    }
+
+    fun continueWithOnlineRecognition(target: SpeechInputTarget) {
+        val standardRecognizer = if (usingOnDeviceRecognizer) {
+            createRecognizer(appContext, preferOnDevice = false)
+        } else {
+            recognizer ?: createRecognizer(appContext, preferOnDevice = false)
+        }
+        if (standardRecognizer == null) {
+            activeTarget = null
+            onStateChanged(
+                SpeechCaptureState.Unavailable(
+                    "Android's speech service is unavailable. Your text is safe; please type instead.",
+                ),
+            )
+            return
+        }
+        if (recognizer !== standardRecognizer) {
+            recognizer?.destroy()
+            recognizer = standardRecognizer
+        }
+        usingOnDeviceRecognizer = false
+        activeTarget = target
+        standardRecognizer.setRecognitionListener(this)
+        onStateChanged(SpeechCaptureState.Listening(target))
+        runCatching {
+            standardRecognizer.startListening(recognitionIntent())
+        }.onFailure {
+            activeTarget = null
+            onStateChanged(SpeechCaptureState.Error("Online speech could not start. Your text is safe; please try again."))
+        }
+    }
+
+    fun declineOnlineRecognition() {
+        activeTarget = null
+        onStateChanged(SpeechCaptureState.Error("Online speech wasn’t used. Your text is safe; you can type instead."))
     }
 
     fun stop() {
@@ -90,6 +146,16 @@ class AtomSpeechRecognizer(
     }
 
     override fun onError(error: Int) {
+        val target = activeTarget
+        if (
+            target != null &&
+            usingOnDeviceRecognizer &&
+            SpeechRecognizer.isRecognitionAvailable(appContext) &&
+            shouldOfferOnlineFallback(error)
+        ) {
+            onStateChanged(SpeechCaptureState.OnlineConsentRequired(target))
+            return
+        }
         activeTarget = null
         onStateChanged(SpeechCaptureState.Error(errorMessage(error)))
     }
@@ -120,39 +186,41 @@ class AtomSpeechRecognizer(
         putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+        putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, usingOnDeviceRecognizer)
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, appContext.packageName)
     }
 
     companion object {
         fun capability(context: Context): SpeechCapability {
-            if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                return SpeechCapability(
-                    available = false,
-                    isGuaranteedOnDevice = false,
-                    description = "Speech recognition is not installed on this phone. You can keep typing reminders.",
-                )
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val onDeviceAvailable = SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
-                return if (onDeviceAvailable) {
-                    SpeechCapability(
-                        available = true,
-                        isGuaranteedOnDevice = true,
-                        description = "On-device speech is ready",
-                    )
-                } else {
-                    SpeechCapability(
-                        available = false,
-                        isGuaranteedOnDevice = false,
-                        description = "Offline speech is not available for this language. Install the offline language pack or type instead.",
-                    )
-                }
-            }
-            return SpeechCapability(
+            val standardAvailable = SpeechRecognizer.isRecognitionAvailable(context)
+            val onDeviceAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+                SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
+            return capabilityFor(
+                standardAvailable = standardAvailable,
+                onDeviceAvailable = onDeviceAvailable,
+            )
+        }
+
+        internal fun capabilityFor(
+            standardAvailable: Boolean,
+            onDeviceAvailable: Boolean,
+        ): SpeechCapability = when {
+            onDeviceAvailable -> SpeechCapability(
+                available = true,
+                isGuaranteedOnDevice = true,
+                description = "On-device speech is ready",
+            )
+
+            standardAvailable -> SpeechCapability(
                 available = true,
                 isGuaranteedOnDevice = false,
-                description = "Offline-preferred speech is ready",
+                description = "Online speech is available with your permission.",
+            )
+
+            else -> SpeechCapability(
+                available = false,
+                isGuaranteedOnDevice = false,
+                description = "Speech recognition is not installed on this phone. You can keep typing reminders.",
             )
         }
 
@@ -163,28 +231,36 @@ class AtomSpeechRecognizer(
             SpeechRecognizer.ERROR_NETWORK,
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT,
             SpeechRecognizer.ERROR_SERVER,
-            -> "Offline speech could not complete. Check that your language pack is installed, or type instead."
+            SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+            -> "Speech recognition needs an internet connection or an installed offline language pack. Check your connection and try again."
             SpeechRecognizer.ERROR_NO_MATCH -> "I didn’t catch that. Please try again or type it."
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Speech recognition is busy. Wait a moment and try again."
             SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I didn’t hear anything. Tap the microphone and try again."
             SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
             SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE,
-            -> "Offline speech is unavailable for this language. Install its language pack or type instead."
+            -> "Speech recognition is unavailable for this language. Install its offline language pack, change the device language, or type instead."
             SpeechRecognizer.ERROR_TOO_MANY_REQUESTS -> "Voice input has been used too frequently. Wait a moment and try again."
             else -> "Voice input could not finish. Your text is safe; please try again."
         }
 
-        private fun createRecognizer(
-            context: Context,
-            capability: SpeechCapability,
-        ): SpeechRecognizer? {
-            if (!capability.available) return null
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && capability.isGuaranteedOnDevice) {
-                SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
-            } else {
-                SpeechRecognizer.createSpeechRecognizer(context)
+        internal fun shouldOfferOnlineFallback(error: Int): Boolean = error in setOf(
+            SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED,
+            SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE,
+            SpeechRecognizer.ERROR_SERVER,
+            SpeechRecognizer.ERROR_SERVER_DISCONNECTED,
+        )
+
+        private fun createRecognizer(context: Context, preferOnDevice: Boolean): SpeechRecognizer? = runCatching {
+            when {
+                preferOnDevice && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+                    SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
+
+                SpeechRecognizer.isRecognitionAvailable(context) ->
+                    SpeechRecognizer.createSpeechRecognizer(context)
+
+                else -> null
             }
-        }
+        }.getOrNull()
 
         private fun Bundle?.firstTranscript(): String? = this
             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)

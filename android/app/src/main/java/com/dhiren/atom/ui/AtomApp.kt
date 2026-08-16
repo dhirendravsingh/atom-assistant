@@ -1352,8 +1352,13 @@ private fun CaptureScreen(
             Spacer(Modifier.height(8.dp))
             Text(
                 when (val state = speechState) {
-                    is SpeechCaptureState.Listening -> "Listening on your device…"
+                    is SpeechCaptureState.Listening -> if (speechRecognizer.isUsingOnDeviceRecognition) {
+                        "Listening on your device…"
+                    } else {
+                        "Listening with your Android speech provider…"
+                    }
                     is SpeechCaptureState.Processing -> "Finishing transcription…"
+                    is SpeechCaptureState.OnlineConsentRequired -> "Online speech needs your permission."
                     is SpeechCaptureState.Error -> state.message
                     is SpeechCaptureState.Unavailable -> state.message
                     SpeechCaptureState.Idle -> speechRecognizer.capability.description
@@ -1462,6 +1467,13 @@ private fun CaptureScreen(
         }
     }
 
+    (speechState as? SpeechCaptureState.OnlineConsentRequired)?.let { consent ->
+        OnlineSpeechConsentDialog(
+            onAllow = { speechRecognizer.continueWithOnlineRecognition(consent.target) },
+            onDecline = speechRecognizer::declineOnlineRecognition,
+        )
+    }
+
     if (showFollowUp && draft != null) {
         MissingDetailsDialog(
             draft = draft!!,
@@ -1477,6 +1489,42 @@ private fun CaptureScreen(
             },
         )
     }
+}
+
+@Composable
+private fun OnlineSpeechConsentDialog(
+    onAllow: () -> Unit,
+    onDecline: () -> Unit,
+) {
+    val colors = LocalAtomPalette.current
+    AlertDialog(
+        onDismissRequest = onDecline,
+        containerColor = colors.elevated,
+        shape = RoundedCornerShape(28.dp),
+        title = {
+            Text("Use online speech?", color = colors.ink, style = MaterialTheme.typography.titleLarge)
+        },
+        text = {
+            Text(
+                "Your Android speech provider may receive this microphone recording over the internet to turn it into text. Atom does not send it to OpenAI or store the audio.",
+                color = colors.muted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onAllow,
+                colors = ButtonDefaults.buttonColors(containerColor = colors.ink, contentColor = colors.canvas),
+            ) {
+                Text("Use online speech")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDecline) {
+                Text("Type instead", color = colors.muted)
+            }
+        },
+    )
 }
 
 @Composable
@@ -1792,6 +1840,7 @@ private fun MissingDetailsDialog(
                 when (val state = speechState) {
                     is SpeechCaptureState.Listening -> Text("Listening…", color = colors.mintDark, style = MaterialTheme.typography.bodySmall)
                     is SpeechCaptureState.Processing -> Text("Finishing transcription…", color = colors.muted, style = MaterialTheme.typography.bodySmall)
+                    is SpeechCaptureState.OnlineConsentRequired -> Text("Online speech needs your permission.", color = colors.muted, style = MaterialTheme.typography.bodySmall)
                     is SpeechCaptureState.Error -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
                     is SpeechCaptureState.Unavailable -> Text(state.message, color = colors.coral, style = MaterialTheme.typography.bodySmall)
                     SpeechCaptureState.Idle -> Unit
@@ -1832,6 +1881,13 @@ private fun MissingDetailsDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Back", color = colors.muted) } },
     )
+
+    (speechState as? SpeechCaptureState.OnlineConsentRequired)?.let { consent ->
+        OnlineSpeechConsentDialog(
+            onAllow = { speechRecognizer.continueWithOnlineRecognition(consent.target) },
+            onDecline = speechRecognizer::declineOnlineRecognition,
+        )
+    }
 }
 
 @Composable
